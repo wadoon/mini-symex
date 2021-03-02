@@ -6,7 +6,7 @@ dist: trusty
 jdk: oraclejdk11
 
 script:
-  - ./gradlew generateGrammarSource build --scan -s
+  - ./gradlew generateGrammarSource build
 test:
   - /gradlew check
 
