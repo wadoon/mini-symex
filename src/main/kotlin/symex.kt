@@ -1,6 +1,7 @@
 import BinaryExpr.Operator.EQUAL
 import BinaryExpr.Operator.NOT_EQUAL
 import UnaryExpr.Operator.NEGATE
+import java.io.PrintWriter
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -210,7 +211,6 @@ class SymEx {
     }
 
     private fun discharge(state: State) {
-        state.dischargeIntoSmt()
         dischargedGoals += state
     }
 }

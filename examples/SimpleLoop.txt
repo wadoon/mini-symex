@@ -1,11 +1,11 @@
 void main() {
-  int a = 0;
-  havoc a;
-  assume a % 2 == 0;
-  while(true)
-  [invariant a % 2 == 0]
-  [modifies a]
-  {
-    a = a + 2;
-  }
+    int a = 0;
+    havoc a;
+    assume a % 2 == 0;
+    while(true)
+    [invariant a % 2 == 0]
+    [modifies a]
+    {
+        a = a + 2;
+    }
 }
