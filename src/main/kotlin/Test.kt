@@ -24,7 +24,7 @@ void main() {
         """.trimIndent();
 
         val program = ParsingFacade.parseProgram(CharStreams.fromString(p))
-        val symEx = SymEx()
-        symEx.executeStatement(program.procedures.first().body, State())
+        val symEx = SymEx2()
+        symEx.executeStatement(program.procedures.first().body)
     }
 }
