@@ -1,0 +1,180 @@
+\documentclass[a4paper]{article}
+
+\usepackage{palatino}
+\usepackage{mathpazo}
+\usepackage{microtype}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amsthm}
+
+\newtheorem{definition}{Definition}
+
+\DeclareMathOperator{\semi}{;}
+\begin{document}
+\author{Alexander Weigl}
+\title{Mini-SymEx -- Rules}
+\maketitle
+
+\newcommand\config[3]{\langle #1,\:  #2,\: #3 \rangle}
+
+\begin{definition}
+  A configuration of the symbolic execution is a tuple of a function
+  $\sigma \colon Var \to Var$, a set of assumptions $A \subseteq Fml_\Sigma$,
+  and the remaining program $R$.
+  A configuration is   written as $\config{\sigma}AR$.
+\end{definition}
+
+\def\epsilon{\varepsilon}
+
+Our rules use construct the single static assignment form (SSA) dynamical. Using
+SSA reduces the size of verification, but makes the handling of branching a bit
+more difficult.
+
+Some small notations in the rules below:
+\begin{itemize}
+\item $\epsilon$ denotes the empty program.
+\item $e[\sigma]$ denotes the application of the substitution $\sigma$ on the
+  expression $e$. This is equivalent to the symbolical evaluation of the
+  expression.
+\item $\sigma[x \to y]$ is the update of the function at position $x$ to value
+  $y$.
+  
+\item The function $fresh$ always returns a completely new unused variable.
+\end{itemize}
+
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    \config{\sigma}{A}{S_1} \leadsto \config{\sigma'}{A'}{\epsilon}
+  }%
+  {
+    \config\sigma{A}{S_1\semi S_2}
+    \leadsto
+    \config{\sigma'}{A'}{S_2}
+  }\mathtt{comp}
+\end{equation}
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    \quad%\config{\sigma}{S_1} \leadsto \config{\sigma'}{\epsilon}
+  }%
+  {
+    \config\sigma A{\mathtt{assume}~e}
+    \leadsto
+    \config{\sigma'}{A \cup e[\sigma]}{\epsilon}
+  }\mathtt{assume}
+\end{equation}
+
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    A \implies e[\sigma]
+    \quad%\config{\sigma}{S_1} \leadsto \config{\sigma'}{\epsilon}
+  }%
+  {
+    \config\sigma A{\mathtt{assert}~e}
+    \leadsto
+    \config{\sigma'}{A \cup e[\sigma]}{\epsilon}
+  }\mathtt{assert}
+\end{equation}
+
+Rule \texttt{assert} is the only rule which charges a verification condition, in
+particular, $A \implies e[\sigma]$ must be valid. For SMT-solving, we apply the
+deduction theorem and check $A \wedge \neg e[\sigma]$ for unsat.
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    a'=fresh()
+    \quad
+    A' = A \cup \{a' = e[\sigma]\}
+    \quad
+    \sigma' = \sigma[a \to a']
+  }%
+  {
+    \config\sigma A{a~\mathtt{:=}~e}
+    \leadsto
+    \config{\sigma'}{A'}{\epsilon}
+  }\mathtt{assign}
+\end{equation}
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    a'=fresh()
+    \quad
+    \sigma' = \sigma[a \to a']
+  }%
+  {
+    \config\sigma A{\mathtt{havoc}~a}
+    \leadsto
+    \config{\sigma'}{A}{\epsilon}
+  }\mathtt{havoc}
+\end{equation}
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    \begin{matrix}
+      (T) & \config\sigma A{\mathtt{assume}~c\semi S_1} \leadsto \config{\sigma_T}{A_T}{\epsilon}\\
+      (E) & \config\sigma A{\mathtt{assume}~\neg c\semi S_2}\leadsto \config{\sigma_E}{A_E}{\epsilon}\\
+      %
+      (M\sigma)& \sigma' = \sigma \cup \{ v \to fresh() \mid \sigma_T[v] \neq \sigma_E[v] \}\\
+      %
+      (MA)& A' = A \cup \{  \sigma(v) = \mathtt{ite}(c[\sigma],  \sigma_T[v], \sigma_E[v])   \mid \sigma_T[v] \neq \sigma_E[v]  \}
+    \end{matrix}
+    \quad
+    \quad
+    A' 
+  }%
+  {
+    \config\sigma A{\mathtt{if}~(c)~S_1~\mathtt{else}~S_2}
+    \leadsto
+    \config{\sigma'}{A'}{\epsilon}
+  }\mathtt{if}
+\end{equation}
+
+The cases (T) and (E) should be clear: (T) is the execution of then-branch of
+the if-statement, and (E) for the else-branch, respectively. After both branches
+are executed, we need to merge their state and assumption for conflicting
+(re-assigned) variables. Every conflicting variable is assigned to a fresh
+variable (M$\sigma$). In the assumption, we make a case distinction
+($\mathtt{ite}$), whether to use value and assumptions of the then- or
+else-branch.
+
+\begin{equation}
+  \label{ex:1}
+  \frac%
+  {
+    \begin{matrix}
+      (I) &\config{\sigma}{A%\cup\{c[\mu]\}}
+      }{\mathtt{assert}~Inv}\\
+      (P) &\config{\sigma}{A}{\mathtt{havoc}~E\semi\mathtt{assume}~Inv\land
+        c\semi S\semi\mathtt{assert}~Inv}\\
+      (T) &\config{\sigma}{A}{\mathtt{havoc}~E\semi\mathtt{assume}~Inv\land\neg
+        c} \leads \config{\sigma'}{A'}{\mathtt{skip}}
+    \end{matrix}
+  }%
+  {
+    \config\sigma A{\mathtt{while}(c)~S}
+    \leadsto
+    \config{\sigma'}{A'}{\epsilon}
+  }\mathtt{while}
+\end{equation}
+
+Note that $Inv$ is the invariant of the for the given loop, and $E$ is a set of
+variables. This sets contains all variables which are written during in the loop
+body $S$, and are therefore erased (havoc'd) when proving the preservation and
+termination of the loop.
+
+\end{document}

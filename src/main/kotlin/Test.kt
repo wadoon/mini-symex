@@ -13,6 +13,7 @@ void main() {
     int a = 1;
     int b = 0;
     havoc b;
+    assert a == 1;
     if(b == 0) {
         a = a+2;
     } else {
@@ -24,6 +25,6 @@ void main() {
 
         val program = ParsingFacade.parseProgram(CharStreams.fromString(p))
         val symEx = SymEx()
-        symEx.executeStatement(program.procedures.first().body, Goal())
+        symEx.executeStatement(program.procedures.first().body, State())
     }
 }

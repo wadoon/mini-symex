@@ -35,16 +35,16 @@ grammar tinyc;
 program: procedure+;
 
 procedure
-   : (type|'void') name=id '(' a=args?  ')'
+   : (type|'void') name=id '(' a=binders?  ')'
        ('[' 'pre'        pre=expr ']')?
        ('[' 'post'       post=expr ']')?
-       ('[' 'modifies'   modifies=args ']')?
+       ('[' 'modifies'   modifies=ids ']')?
       body
    ;
 
-args
-   : id (',' id)*
-   ;
+binders: type id (',' type id)*;
+ids: id (',' type id)*;
+
 
 ifStatement
    : 'if' '(' expr ')' statement
@@ -54,7 +54,7 @@ ifStatement
 whileStatement
    : 'while' '(' cond=expr ')'
       ('[' 'invariant' invariant=expr ']')?
-      ('[' 'variant'   variant=args ']')?
+      ('[' ('modifies'|'variant')   variant=ids ']')?
       statement
    ;
 
@@ -74,7 +74,7 @@ emptyStmt: ';';
 
 assert_: 'assert' expr ';';
 assume: 'assume' expr ';';
-havoc: 'havoc' args ';';
+havoc: 'havoc' ids ';';
 
 statement
    : ifStatement
@@ -103,17 +103,15 @@ primary
    : id           # ignore1
    | INT      #integer
    | BOOL      #bool
-   | '(' expr ')' #paren_expr
+   | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
+   | '\\let'  type id '=' expr #letExpr
+   | '(' expr ')' #parenExpr
    | id '(' expr (',' expr)* ')' #fcall
    | id '[' expr ']' #arrayaccess
    ;
 
 id
    : IDENTIFIER
-   ;
-
-IDENTIFIER
-   : [a-z]+
    ;
 
 STRING
@@ -126,6 +124,11 @@ INT
 
 BOOL
    : 'true' | 'false'
+   ;
+
+
+IDENTIFIER
+   : [a-z]+
    ;
 
 WS

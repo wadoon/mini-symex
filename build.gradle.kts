@@ -4,19 +4,26 @@ plugins {
     java
     kotlin("jvm") version "1.4.30"
     antlr
+    application
 }
 
-group = "org.example"
+group = "edu.kit.formal.kastel"
 version = "1.0-SNAPSHOT"
 
-//val compileKotlin: KotlinCompile by tasks
-//compileKotlin.kotlinOptions.useIR = true
+application {
+    mainClass.set("MainKt")
+}
+
+
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.kotlinOptions.useIR = true
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
+    implementation("com.github.ajalt.clikt:clikt:3.1.0")
     implementation(kotlin("stdlib"))
     testCompile("junit", "junit", "4.12")
     implementation("org.antlr:antlr4:4.8") // use ANTLR version 4
