@@ -6,4 +6,4 @@ IfThenElse: install
 	../build/install/mini-symex/bin/mini-symex IfThenElse.txt
 
 SimpleLoop: install
-	../build/install/mini-symex/bin/mini-symex SimpleLoop.txt
+	../build/install/mini-symex/bin/mini-symex SimpleLoop.txt | z3 -in -smt2

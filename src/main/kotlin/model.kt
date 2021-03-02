@@ -2,7 +2,14 @@ import java.math.BigInteger
 
 //region
 interface Metadata
-data class Position(val source: String, val startOffset: Int, val endOffset: Int) : Metadata
+data class Position(
+    val source: String, val startOffset: Int, val endOffset: Int,
+    val startLine: Int = 0, val startInLine: Int = 0,
+    val endLine: Int = 0, val endInLine: Int = 0
+) : Metadata {
+    override fun toString(): String  = "@($startLine,$startInLine)"
+}
+
 data class Declaration(val position: Position) : Metadata
 //endregion
 
@@ -131,9 +138,20 @@ data class FunctionCall(var id: Variable, val args: MutableList<Expr>) : Expr()
 sealed class Statement : Node()
 data class HavocStmt(var ids: MutableList<Variable>) : Statement()
 
-data class AssumeStmt(var cond: Expr) : Statement()
+data class AssumeStmt(var cond: Expr) : Statement() {
+    var description: String? = null
+    constructor(cond: Expr, desc: String) : this(cond) {
+        description = desc
+    }
+}
 
-data class AssertStmt(var cond: Expr) : Statement()
+data class AssertStmt(var cond: Expr) : Statement() {
+        var description: String? = null
+    constructor(cond: Expr, desc: String) : this(cond) {
+        description = desc
+    }
+
+}
 
 data class Body(val statements: MutableList<Statement>) : Statement()
 
@@ -154,3 +172,14 @@ data class AssignStmt(
 ) : Statement()
 
 data class TypeDecl(val name: String, val array: Boolean = false) : Node()
+
+
+fun Expr.toHuman(): String = when (this) {
+    is BinaryExpr -> "(${left.toHuman()} $op ${right.toHuman()})"
+    is BoolLit -> value.toString()
+    is FunctionCall -> TODO()
+    is IntLit -> value.toString()
+    is QuantifiedExpr -> "(\\${quantifier.smtSymbol}  ${binders.joinToString(", ") { (a, b) -> "${a.name} ${b.id}" }} ${left.toHuman()})"
+    is UnaryExpr -> "($op ${right.toHuman()})"
+    is Variable -> id
+}

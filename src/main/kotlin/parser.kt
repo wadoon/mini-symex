@@ -30,9 +30,16 @@ object ParsingFacade {
 private class AstTranslator : tinycBaseVisitor<Node>() {
     private fun <T : Node> T.withPosition(ctx: ParserRuleContext): T {
         val source = ctx.start.tokenSource.sourceName
-        val start = ctx.start.startIndex
-        val stop = ctx.stop.stopIndex
-        this.position = Position(source, start, stop)
+
+        this.position = Position(
+            source,
+            startOffset = ctx.start.startIndex,
+            endOffset = ctx.stop.stopIndex,
+            startLine = ctx.start.line,
+            startInLine = ctx.start.charPositionInLine,
+            endLine = ctx.stop.line,
+            endInLine = ctx.stop.charPositionInLine,
+        )
         return this
     }
 
