@@ -1,9 +1,10 @@
 import QuantifiedExpr.Quantifier.EXISTS
 import QuantifiedExpr.Quantifier.FORALL
+import UnaryExpr.Operator.NEGATE
+import UnaryExpr.Operator.SUB
 import org.antlr.v4.runtime.CharStream
 import org.antlr.v4.runtime.CommonTokenStream
 import org.antlr.v4.runtime.ParserRuleContext
-import java.lang.NullPointerException
 
 /**
  *
@@ -18,7 +19,7 @@ object ParsingFacade {
         val parser = tinycParser(CommonTokenStream(lexer))
         val ctx = parser.program()
 
-        require(parser.numberOfSyntaxErrors==0) {
+        require(parser.numberOfSyntaxErrors == 0) {
             "Syntax Errors!"
         }
 
@@ -84,6 +85,11 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         if (ctx == null) arrayListOf()
         else ctx.id()?.map { (it.accept(this) as Variable).withPosition(ctx) }?.toMutableList() ?: arrayListOf()
 
+    override fun visitUnary(ctx: tinycParser.UnaryContext) = UnaryExpr(
+        if (ctx.op.text == "!") NEGATE else SUB,
+        ctx.expr().accept(this) as Expr
+    ).withPosition(ctx)
+
     val TRUE = BoolLit(true)
 
     override fun visitIfStatement(ctx: tinycParser.IfStatementContext): Node {
@@ -125,14 +131,13 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         return TypeDecl(type.t.text, type.a != null).withPosition(type)
     }
 
-    override fun visitBool(ctx: tinycParser.BoolContext): Node
-    = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
+    override fun visitBool(ctx: tinycParser.BoolContext): Node = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
 
     override fun visitExpr(ctx: tinycParser.ExprContext): Node {
         if (ctx.primary() != null) {
-            try{
+            try {
                 return ctx.primary().accept(this)
-            }catch (e : NullPointerException) {
+            } catch (e: NullPointerException) {
                 println(ctx.text)
             }
         }
@@ -156,6 +161,9 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
             ">=" -> BinaryExpr.Operator.GTE
             "==" -> BinaryExpr.Operator.EQUAL
             "!=" -> BinaryExpr.Operator.NOT_EQUAL
+            "&&" -> BinaryExpr.Operator.AND
+            "||" -> BinaryExpr.Operator.OR
+            "==>" -> BinaryExpr.Operator.IMPLIES
             else -> throw IllegalArgumentException("Unknown operator '$text'.")
         }
 

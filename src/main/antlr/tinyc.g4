@@ -100,9 +100,10 @@ expr
   ;
 
 primary
-   : id           # ignore1
+   : id       # ignore1
    | INT      #integer
    | BOOL      #bool
+   | op=('!'|'-') expr #unary
    | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
    | '\\let'  type id '=' expr #letExpr
    | '(' expr ')' #parenExpr

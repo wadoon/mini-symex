@@ -8,9 +8,6 @@ import java.util.concurrent.atomic.AtomicInteger
  * @author Alexander Weigl
  * @version 1 (2/25/21)
  */
-//inline class Formula(val value: String)
-//inline class Name(val value: String)
-
 var PRINT_ATTRIBUTES = true
 
 class State(
@@ -22,7 +19,6 @@ class State(
 ) {
     fun freshConst(lhs: Variable): String {
         val v = variables.computeIfAbsent(lhs) { arrayListOf(uniqueCounter.getAndIncrement()) }
-        //variables[lhs]
         v.add(uniqueCounter.getAndIncrement())
         return currentVar(lhs)
     }
@@ -57,16 +53,13 @@ class State(
         return sb.toString()
     }
 
-    fun newGoal(): State {
-        val g = State(
-            uniqueCounter = uniqueCounter,
-            signature = HashMap(signature),
-            variables = HashMap(variables),
-            assumptions = ArrayList(assumptions),
-            assertions = arrayListOf()//ArrayList(assertions)
-        )
-        return g
-    }
+    fun newGoal(): State = State(
+        uniqueCounter = uniqueCounter,
+        signature = HashMap(signature),
+        variables = HashMap(variables),
+        assumptions = ArrayList(assumptions),
+        assertions = arrayListOf() //delete assertions
+    )
 
     fun currentVar(id: Variable): String {
         val cnt = variables.computeIfAbsent(id) { arrayListOf(uniqueCounter.getAndIncrement()) }.last()
@@ -166,8 +159,6 @@ class SymEx {
                 afterIf
             }
             is WhileStmt -> {
-                val cond = encodeExpression(s.cond, state)
-
                 val init = state.newGoal()
                 val preservation = state.newGoal()
                 val termination = state.newGoal()
@@ -189,7 +180,6 @@ class SymEx {
                 s.erase.forEach { termination.freshConst(it) }
                 termination.assumptions += encodeExpression(s.loopInv, preservation)
                 termination.assumptions += "(not ${encodeExpression(s.cond, preservation)})"
-                //discharge(termination)
 
                 termination
             }
@@ -208,9 +198,6 @@ class SymEx {
         conditionallyAdd(target.assumptions, firstBranch.second.assumptions, firstBranch.first)
         conditionallyAdd(target.assumptions, secondBranch.second.assumptions, secondBranch.first)
 
-        //conditionallyAdd(target.assertions, firstBranch.second.assertions, firstBranch.first)
-        //conditionallyAdd(target.assertions, secondBranch.second.assertions, secondBranch.first)
-
         val allVars = secondBranch.second.signature.keys + firstBranch.second.signature.keys
         allVars.forEach { v ->
             val vThen = firstBranch.second.currentVar(v)
@@ -223,7 +210,7 @@ class SymEx {
     }
 
     private fun discharge(state: State) {
-        print(state.dischargeIntoSmt())
+        state.dischargeIntoSmt()
         dischargedGoals += state
     }
 }
