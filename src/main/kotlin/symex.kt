@@ -20,6 +20,8 @@ class SymEx2 {
             variables = variables
         )
 
+        fun clone() = Scope(signature = HashMap(signature), variables = HashMap(variables))
+
         fun currentVar(id: Variable): String {
             val cnt = variables.computeIfAbsent(id) { arrayListOf(0) }.last()
             return "${id.id}_${cnt}"
@@ -39,8 +41,11 @@ class SymEx2 {
     val commands = arrayListOf<String>()
 
     private fun declareConst(t: Type, v: Variable, i: Int) {
-        require(t.dimension == 0) { "arrays currently not supported" }
-        commands += "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
+        if (t.dimension == 0)
+            commands += "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
+        else
+            commands += "(declare-const ${v.id}_${i} (Array Int ${t.toSmtType()}))\n"
+        require(!(t.dimension >= 2))
     }
 
     private fun discharge(expr: String, name: String = "") {
@@ -73,7 +78,9 @@ class SymEx2 {
         return scope
     }
 
-    fun encodeExpression(expr: Expr, state: Scope): String = when (expr) {
+    fun encodeExpression(expr: Expr, state: Scope): String = encodeExpression(expr, state::currentVar)
+
+    fun encodeExpression(expr: Expr, state: (Variable) -> String): String = when (expr) {
         is BinaryExpr ->
             if (expr.op == NOT_EQUAL)
                 encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), state)
@@ -87,14 +94,23 @@ class SymEx2 {
         is FunctionCall -> TODO()
         is IntLit -> expr.value.toString()
         is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, state)})"
-        is Variable -> state.currentVar(expr)
+        is Variable -> state(expr)
         is BoolLit -> expr.value.toString()
         is QuantifiedExpr -> {
             val q = expr.quantifier.smtSymbol
             val b = expr.binders.joinToString(" ") { (t, v) ->
                 "(${t.toSmtType()} ${v.id})"
             }
-            "($q ($b))"
+            val s = { a: Variable ->
+                if (expr.binders.any { (_, v) -> a == v }) a.id
+                else state(a)
+            }
+            "($q ($b) ${encodeExpression(expr.sub, s)})"
+        }
+        is ArrayAccess -> {
+            expr.args.foldRight(encodeExpression(expr.id, state)) { e, acc ->
+                "(select $acc ${encodeExpression(e, state)})"
+            }
         }
     }
 
@@ -117,14 +133,21 @@ class SymEx2 {
                 state
             }
             is AssignStmt -> {
-                require(s.arrayAccess == null) { "arrays currently unsupported" }
-                s.decl?.let {
-                    state.signature[s.id] = it
+                s.decl?.let { state.signature[s.id] = it }
+
+                s.rhs?.let { expr ->
+                    val lhs = s.id
+
+                    val rhs = encodeExpression(expr, state)
+
+                    val value = s.arrayAccess?.let {
+                        val aexpr = encodeExpression(it, state)
+                        "(store ${state.currentVar(s.id)} $aexpr $rhs)"
+                    } ?: rhs
+
+                    val fresh = state.freshConst(lhs)
+                    assume("(= $fresh $value)")
                 }
-                val lhs = s.id
-                val rhs = encodeExpression(s.lhs, state)
-                val fresh = state.freshConst(lhs)
-                assume("(= $fresh $rhs)")
                 state
             }
             is Body -> s.statements.fold(state) { acc, statement -> executeStatement(statement, acc) }
@@ -185,8 +208,10 @@ class SymEx2 {
                     assume(encodeExpression(s.loopInv, preservation))
                     assume(encodeExpression(s.cond, preservation))
                     val afterBody = executeStatement(s.then, preservation)
-                    discharge(encodeExpression(s.loopInv, afterBody),
-                            "Ensure Preservation of Loop Invariant")
+                    discharge(
+                        encodeExpression(s.loopInv, afterBody),
+                        "Ensure Preservation of Loop Invariant"
+                    )
                     afterBody
                 }
 

@@ -63,9 +63,10 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         TODO()
     }
 
-    override fun visitArrayaccess(ctx: tinycParser.ArrayaccessContext?): Node {
-        TODO()
-    }
+    override fun visitArrayaccess(ctx: tinycParser.ArrayaccessContext) =
+        ArrayAccess(ctx.id().accept(this) as Variable, exprList(ctx.exprList()))
+            .withPosition(ctx)
+
 
     override fun visitProcedure(ctx: tinycParser.ProcedureContext): Node {
         val b = ctx.body().accept(this) as Body
@@ -83,7 +84,7 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         if (ctx == null) arrayListOf()
         else {
             (0 until ctx.id().size).map {
-                ctx.type(it).accept(this) as TypeDecl to
+                type(ctx.type(it)) as TypeDecl to
                         ctx.id(it).accept(this) as Variable
             }.toMutableList()
         }
@@ -129,7 +130,7 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
 
     override fun visitAssignment(ctx: tinycParser.AssignmentContext) = AssignStmt(
         ctx.id().accept(this) as Variable,
-        ctx.rhs.accept(this) as Expr,
+        ctx.rhs?.accept(this) as Expr?,
         type(ctx.type()),
     ).withPosition(ctx)
 
@@ -146,6 +147,7 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
                 return ctx.primary().accept(this)
             } catch (e: NullPointerException) {
                 println(ctx.text)
+                throw e
             }
         }
         return BinaryExpr(
@@ -168,8 +170,8 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
             ">=" -> BinaryExpr.Operator.GTE
             "==" -> BinaryExpr.Operator.EQUAL
             "!=" -> BinaryExpr.Operator.NOT_EQUAL
-            "&&" -> BinaryExpr.Operator.AND
-            "||" -> BinaryExpr.Operator.OR
+            "&" -> BinaryExpr.Operator.AND
+            "|" -> BinaryExpr.Operator.OR
             "==>" -> BinaryExpr.Operator.IMPLIES
             else -> throw IllegalArgumentException("Unknown operator '$text'.")
         }
@@ -178,8 +180,11 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
 
     override fun visitFcall(ctx: tinycParser.FcallContext) = FunctionCall(
         ctx.id().accept(this) as Variable,
-        map(ctx.expr())
+        exprList(ctx.exprList())
     ).withPosition(ctx)
+
+    private fun exprList(ctx: tinycParser.ExprListContext): MutableList<Expr> = map(ctx.expr())
+
 
     override fun visitEmptyStmt(ctx: tinycParser.EmptyStmtContext) = EmptyStmt().withPosition(ctx)
     override fun visitAssert_(ctx: tinycParser.Assert_Context) =

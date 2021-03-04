@@ -43,7 +43,7 @@ procedure
    ;
 
 binders: type id (',' type id)*;
-ids: id (',' type id)*;
+ids: id (',' id)*;
 
 
 ifStatement
@@ -64,6 +64,7 @@ body
 
 assignment
    : type? id ('[' aa=expr ']')? '=' rhs=expr ';'
+   | type id ';' //declaraion
    ;
 
 type
@@ -96,6 +97,7 @@ expr
   | expr op='^' expr
   | expr op=('<'|'<='|'>'|'>=') expr
   | expr op=('=='|'!=') expr
+  | expr op='==>' expr
   | primary
   ;
 
@@ -107,9 +109,11 @@ primary
    | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
    | '\\let'  type id '=' expr #letExpr
    | '(' expr ')' #parenExpr
-   | id '(' expr (',' expr)* ')' #fcall
-   | id '[' expr ']' #arrayaccess
+   | id '(' exprList ')' #fcall
+   | id '[' exprList ']' #arrayaccess
    ;
+
+exprList: expr (',' expr)*;
 
 id
    : IDENTIFIER
