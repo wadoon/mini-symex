@@ -15,8 +15,8 @@ import org.antlr.v4.runtime.ParserRuleContext
 object ParsingFacade {
     @JvmStatic
     fun parseProgram(stream: CharStream): Program {
-        val lexer = tinycLexer(stream)
-        val parser = tinycParser(CommonTokenStream(lexer))
+        val lexer = MiniPascalLexer(stream)
+        val parser = MiniPascalParser(CommonTokenStream(lexer))
         val ctx = parser.program()
 
         require(parser.numberOfSyntaxErrors == 0) {
@@ -27,7 +27,7 @@ object ParsingFacade {
     }
 }
 
-private class AstTranslator : tinycBaseVisitor<Node>() {
+private class AstTranslator : MiniPascalBaseVisitor<Node>() {
     private fun <T : Node> T.withPosition(ctx: ParserRuleContext): T {
         val source = ctx.start.tokenSource.sourceName
 
@@ -43,7 +43,7 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         return this
     }
 
-    override fun visitProgram(ctx: tinycParser.ProgramContext): Node {
+    override fun visitProgram(ctx: MiniPascalParser.ProgramContext): Node {
         return Program(map(ctx.procedure()))
             .withPosition(ctx)
     }
@@ -52,35 +52,35 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
         ctx.map { it.accept(this) as T }.toMutableList()
 
 
-    override fun visitQuantifiedExpr(ctx: tinycParser.QuantifiedExprContext): Node =
+    override fun visitQuantifiedExpr(ctx: MiniPascalParser.QuantifiedExprContext): Node =
         QuantifiedExpr(
             binders(ctx.binders()), ctx.expr().accept(this) as Expr,
             if (ctx.q.text.last() == 's') EXISTS else FORALL
         ).withPosition(ctx)
 
 
-    override fun visitLetExpr(ctx: tinycParser.LetExprContext?): Node {
+    override fun visitLetExpr(ctx: MiniPascalParser.LetExprContext?): Node {
         TODO()
     }
 
-    override fun visitArrayaccess(ctx: tinycParser.ArrayaccessContext) =
+    override fun visitArrayaccess(ctx: MiniPascalParser.ArrayaccessContext) =
         ArrayAccess(ctx.id().accept(this) as Variable, exprList(ctx.exprList()))
             .withPosition(ctx)
 
 
-    override fun visitProcedure(ctx: tinycParser.ProcedureContext): Node {
+    override fun visitProcedure(ctx: MiniPascalParser.ProcedureContext): Node {
         val b = ctx.body().accept(this) as Body
         val args = binders(ctx.a)
 
         return Procedure(
             ctx.name.text, args, b,
-            requires = ctx.pre?.accept(this) as? Expr? ?: TRUE,
-            ensures = ctx.post?.accept(this) as? Expr? ?: TRUE,
-            modifies = variables(ctx.modifies)
+            requires = ctx.spec().pre?.accept(this) as? Expr? ?: TRUE,
+            ensures = ctx.spec().post?.accept(this) as? Expr? ?: TRUE,
+            modifies = variables(ctx.spec().modifies)
         ).withPosition(ctx)
     }
 
-    private fun binders(ctx: tinycParser.BindersContext?): MutableList<Pair<TypeDecl, Variable>> =
+    private fun binders(ctx: MiniPascalParser.BindersContext?): MutableList<Pair<TypeDecl, Variable>> =
         if (ctx == null) arrayListOf()
         else {
             (0 until ctx.id().size).map {
@@ -89,18 +89,18 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
             }.toMutableList()
         }
 
-    private fun variables(ctx: tinycParser.IdsContext?): MutableList<Variable> =
+    private fun variables(ctx: MiniPascalParser.IdsContext?): MutableList<Variable> =
         if (ctx == null) arrayListOf()
         else ctx.id()?.map { (it.accept(this) as Variable).withPosition(ctx) }?.toMutableList() ?: arrayListOf()
 
-    override fun visitUnary(ctx: tinycParser.UnaryContext) = UnaryExpr(
+    override fun visitUnary(ctx: MiniPascalParser.UnaryContext) = UnaryExpr(
         if (ctx.op.text == "!") NEGATE else SUB,
         ctx.expr().accept(this) as Expr
     ).withPosition(ctx)
 
     val TRUE = BoolLit(true)
 
-    override fun visitIfStatement(ctx: tinycParser.IfStatementContext): Node {
+    override fun visitIfStatement(ctx: MiniPascalParser.IfStatementContext): Node {
         return IfStmt(
             ctx.expr().accept(this) as Expr,
             body(ctx.statement(0)),
@@ -109,7 +109,7 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
 
     }
 
-    private fun body(statement: tinycParser.StatementContext?): Body {
+    private fun body(statement: MiniPascalParser.StatementContext?): Body {
         val b = Body(arrayListOf())
         if (statement == null) return b
         b.withPosition(statement)
@@ -119,29 +119,29 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
 
     }
 
-    override fun visitWhileStatement(ctx: tinycParser.WhileStatementContext) = WhileStmt(
+    override fun visitWhileStatement(ctx: MiniPascalParser.WhileStatementContext) = WhileStmt(
         ctx.cond.accept(this) as Expr,
         body(ctx.statement()),
-        ctx.invariant?.accept(this) as Expr,
-        erase = variables(ctx.variant)
+        ctx.loopSpec().invariant?.accept(this) as Expr,
+        erase = variables(ctx.loopSpec().variant)
     ).withPosition(ctx)
 
-    override fun visitBody(ctx: tinycParser.BodyContext) = Body(map(ctx.statement())).withPosition(ctx)
+    override fun visitBody(ctx: MiniPascalParser.BodyContext) = Body(map(ctx.statement())).withPosition(ctx)
 
-    override fun visitAssignment(ctx: tinycParser.AssignmentContext) = AssignStmt(
+    override fun visitAssignment(ctx: MiniPascalParser.AssignmentContext) = AssignStmt(
         ctx.id().accept(this) as Variable,
         ctx.rhs?.accept(this) as Expr?,
-        type(ctx.type()),
+        null,
     ).withPosition(ctx)
 
-    private fun type(type: tinycParser.TypeContext?): TypeDecl? {
+    private fun type(type: MiniPascalParser.TypeContext?): TypeDecl? {
         if (type == null) return null
         return TypeDecl(type.t.text, type.a != null).withPosition(type)
     }
 
-    override fun visitBool(ctx: tinycParser.BoolContext): Node = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
+    override fun visitBool(ctx: MiniPascalParser.BoolContext): Node = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
 
-    override fun visitExpr(ctx: tinycParser.ExprContext): Node {
+    override fun visitExpr(ctx: MiniPascalParser.ExprContext): Node {
         if (ctx.primary() != null) {
             try {
                 return ctx.primary().accept(this)
@@ -176,26 +176,26 @@ private class AstTranslator : tinycBaseVisitor<Node>() {
             else -> throw IllegalArgumentException("Unknown operator '$text'.")
         }
 
-    override fun visitInteger(ctx: tinycParser.IntegerContext) = IntLit(ctx.INT().text.toBigInteger()).withPosition(ctx)
+    override fun visitInteger(ctx: MiniPascalParser.IntegerContext) = IntLit(ctx.INT().text.toBigInteger()).withPosition(ctx)
 
-    override fun visitFcall(ctx: tinycParser.FcallContext) = FunctionCall(
+    override fun visitFcall(ctx: MiniPascalParser.FcallContext) = FunctionCall(
         ctx.id().accept(this) as Variable,
         exprList(ctx.exprList())
     ).withPosition(ctx)
 
-    private fun exprList(ctx: tinycParser.ExprListContext): MutableList<Expr> = map(ctx.expr())
+    private fun exprList(ctx: MiniPascalParser.ExprListContext): MutableList<Expr> = map(ctx.expr())
 
 
-    override fun visitEmptyStmt(ctx: tinycParser.EmptyStmtContext) = EmptyStmt().withPosition(ctx)
-    override fun visitAssert_(ctx: tinycParser.Assert_Context) =
+    override fun visitEmptyStmt(ctx: MiniPascalParser.EmptyStmtContext) = EmptyStmt().withPosition(ctx)
+    override fun visitAssert_(ctx: MiniPascalParser.Assert_Context) =
         AssertStmt(ctx.expr().accept(this) as Expr).withPosition(ctx)
 
-    override fun visitAssume(ctx: tinycParser.AssumeContext) =
+    override fun visitAssume(ctx: MiniPascalParser.AssumeContext) =
         AssumeStmt(ctx.expr().accept(this) as Expr).withPosition(ctx)
 
-    override fun visitHavoc(ctx: tinycParser.HavocContext) = HavocStmt(
+    override fun visitHavoc(ctx: MiniPascalParser.HavocContext) = HavocStmt(
         ctx.ids().id().map { it.accept(this) as Variable }.toMutableList()
     ).withPosition(ctx)
 
-    override fun visitId(ctx: tinycParser.IdContext) = Variable(ctx.IDENTIFIER().text)
+    override fun visitId(ctx: MiniPascalParser.IdContext) = Variable(ctx.IDENTIFIER().text)
 }

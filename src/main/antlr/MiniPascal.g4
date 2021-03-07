@@ -30,65 +30,82 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-grammar tinyc;
+grammar MiniPascal;
 
-program: procedure+;
+program: (procedure|function)+;
 
 procedure
-   : (type|'void') name=id '(' a=binders?  ')'
-       ('[' 'pre'        pre=expr ']')?
-       ('[' 'post'       post=expr ']')?
-       ('[' 'modifies'   modifies=ids ']')?
+   : 'procedure' name=id '(' a=binders?  ')' ';'?
+      var
+      spec
       body
    ;
 
-binders: type id (',' type id)*;
+function
+   : 'function' name=id '(' a=binders?  ')' ':' type ';'?
+      var
+      spec
+      body
+   ;
+
+var: 'var' (varDecl)*;
+varDecl: type id ':=' rhs=expr ';';
+
+spec:
+      ('[' 'pre'        pre=expr ']')?
+      ('[' 'post'       post=expr ']')?
+      ('[' 'modifies'   modifies=ids ']')?
+     ;
+
+binders: id ':' type  (','  id ':' type)*;
 ids: id (',' id)*;
 
-
 ifStatement
-   : 'if' '(' expr ')' statement
-   | 'if' '(' expr ')' statement 'else' statement
+   : 'if' expr 'then' statement
+   | 'if' expr 'then' statement 'else' statement
    ;
 
 whileStatement
-   : 'while' '(' cond=expr ')'
-      ('[' 'invariant' invariant=expr ']')?
-      ('[' ('modifies'|'variant')   variant=ids ']')?
+   : 'while' cond=expr 'do'
+      loopSpec
       statement
    ;
 
+loopSpec
+   :  ('[' 'invariant' invariant=expr ']')?
+      ('[' ('modifies'|'variant')   variant=ids ']')?
+   ;
+
 body
-   : '{' statement* '}'
+   : 'begin' (statement (';' statement))* ';'? 'end'
    ;
 
 assignment
-   : type? id ('[' aa=expr ']')? '=' rhs=expr ';'
-   | type id ';' //declaraion
+   : id ('[' aa=expr ']')? ':=' rhs=expr
    ;
 
+primitiveTypes: 'int'|'bool';
+
 type
-   : t=('int'|'bool') (a='[]')?
+   : t=primitiveTypes (a='[]')?
    ;
 
 emptyStmt: ';';
 
-assert_: 'assert' expr ';';
-assume: 'assume' expr ';';
-havoc: 'havoc' ids ';';
-returnStatement: 'return' expr;
+assert_: 'assert' '(' expr  ')';
+assume: 'assume' '('expr')';
+havoc: 'havoc' '(' ids ')';
 
 
 statement
    : ifStatement
    | whileStatement
-   | returnStatement
    | body
    | assignment
    | assert_
    | assume
    | havoc
-   | emptyStmt
+   //| emptyStmt
    ;
 
 expr
