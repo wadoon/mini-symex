@@ -11,3 +11,6 @@ LoopInit: install
 
 SimpleLoop: install
 	../build/install/mini-symex/bin/mini-symex SimpleLoop.txt $(Z3)
+
+Fib: install
+	../build/install/mini-symex/bin/mini-symex Fib.txt

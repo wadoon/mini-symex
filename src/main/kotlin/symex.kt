@@ -10,7 +10,7 @@ import java.io.PrintWriter
  */
 var PRINT_ATTRIBUTES = true
 
-class SymEx2 {
+class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
     inner class Scope(
         val signature: HashMap<Variable, TypeDecl> = HashMap(),
         val variables: HashMap<Variable, MutableList<Int>> = HashMap()
@@ -38,6 +38,8 @@ class SymEx2 {
         }
     }
 
+    private val vcgGenerated = HashSet<String>()
+
     val commands = arrayListOf<String>()
 
     private fun declareConst(t: Type, v: Variable, i: Int) {
@@ -45,14 +47,18 @@ class SymEx2 {
             commands += "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
         else
             commands += "(declare-const ${v.id}_${i} (Array Int ${t.toSmtType()}))\n"
-        require(!(t.dimension >= 2))
+        require(t.dimension < 2)
     }
 
     private fun discharge(expr: String, name: String = "") {
         isolatedGoal(name) {
             assert(expr)
-            commands += "(check-sat)"
+            checkSat()
         }
+    }
+
+    private fun checkSat() {
+        commands += "(check-sat)"
     }
 
     private fun assume(expr: String, name: String = "") {
@@ -91,7 +97,7 @@ class SymEx2 {
                         state
                     )
                 })"
-        is FunctionCall -> TODO()
+        is FunctionCall -> error("Function calls only supported as standalone rhs.")
         is IntLit -> expr.value.toString()
         is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, state)})"
         is Variable -> state(expr)
@@ -137,8 +143,11 @@ class SymEx2 {
 
                 s.rhs?.let { expr ->
                     val lhs = s.id
-
-                    val rhs = encodeExpression(expr, state)
+                    val rhs =
+                        if (expr is FunctionCall)
+                            encodeFunctionCallExpression(expr, state)
+                        else
+                            encodeExpression(expr, state)
 
                     val value = s.arrayAccess?.let {
                         val aexpr = encodeExpression(it, state)
@@ -226,11 +235,57 @@ class SymEx2 {
         }
     }
 
+
+    private fun encodeFunctionCallExpression(expr: FunctionCall, state: Scope): String {
+        val function = procedures.find { it.name == expr.id.id }
+        require(function != null)
+
+        // Prove the function behind the function call
+        if (function.name !in vcgGenerated)
+            proveBody(function)
+
+        // reduce the arguments to single variables (introduce assignments)
+        isolatedGoal {
+            val sig = state.clone()
+
+            val params: List<String> = function.args.map { (t, v) ->
+                sig.signature[v] = t
+                sig.freshConst(v)
+            }
+
+            expr.args.zip(params).forEach { (e, p) ->
+                assume("(= $p ${encodeExpression(e, state)})")
+            }
+
+            // discharge the precondition
+            assert(encodeExpression(function.requires, sig))
+            checkSat()
+        }
+
+        if (function.returnType.toType() != Type.VOID) {
+            val variable = Variable("__retValue__")
+            state.signature[variable] = function.returnType
+            val retValue = state.freshConst(variable)
+            assume(
+                "(= $retValue ${encodeExpression(function.ensures, state)})",
+                name = "Post-condition of ${function.name}"
+            )
+            return retValue
+        }
+        return ""
+    }
+
+    fun proveBody(function: Procedure) {
+        val proofObligation = Body(arrayListOf())
+        proofObligation.statements.add(AssumeStmt(function.requires, "pre-condition of ${function.name}"))
+        proofObligation.statements.add(function.body)
+        proofObligation.statements.add(AssertStmt(function.ensures, "post-condition of ${function.name}"))
+        executeStatement(proofObligation)
+    }
+
     fun encodeInto(out: PrintWriter) {
         commands.forEach { out.println(it) }
     }
-
-
 }
 
 private fun String.named(s: String?): String = if (PRINT_ATTRIBUTES && s != null) "(! $this :named \"$s\")" else this

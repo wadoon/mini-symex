@@ -13,7 +13,9 @@ class MiniSymEx : CliktCommand() {
         .flag("-N", default = true)
     val entryPoint by option("--main", help = "print the position infos").default("main")
 
-    val output by option("-o", "--output", help="a file destination to write SMT to", metavar = "SMT").file(mustBeWritable = true)
+    val output by option("-o", "--output", help = "a file destination to write SMT to", metavar = "SMT").file(
+        mustBeWritable = true
+    )
 
     override fun run() {
         PRINT_ATTRIBUTES = printNames
@@ -27,13 +29,7 @@ class MiniSymEx : CliktCommand() {
         require(entryProgram != null) { "Program $entryPoint not found" }
 
         val symEx = SymEx2()
-
-        val proofObligation = Body(arrayListOf())
-        proofObligation.statements.add(AssumeStmt(entryProgram.requires, "pre-condition of $entryPoint"))
-        proofObligation.statements.add(entryProgram.body)
-        proofObligation.statements.add(AssertStmt(entryProgram.ensures, "post-condition of $entryPoint"))
-        symEx.executeStatement(proofObligation)
-
+        symEx.proveBody(entryProgram)
         val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
         writer.use {
             symEx.encodeInto(it)

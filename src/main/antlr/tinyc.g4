@@ -76,11 +76,13 @@ emptyStmt: ';';
 assert_: 'assert' expr ';';
 assume: 'assume' expr ';';
 havoc: 'havoc' ids ';';
+returnStatement: 'return' expr;
+
 
 statement
    : ifStatement
    | whileStatement
-//   | 'do' statement 'while' paren_expr ';'
+   | returnStatement
    | body
    | assignment
    | assert_
@@ -92,8 +94,8 @@ statement
 expr
   : expr op=('+'|'-') expr
   | expr op=('*'|'/'|'%') expr
-  | expr op='&' expr
-  | expr op='|' expr
+  | expr op='&&' expr
+  | expr op='||' expr
   | expr op='^' expr
   | expr op=('<'|'<='|'>'|'>=') expr
   | expr op=('=='|'!=') expr
@@ -133,7 +135,7 @@ BOOL
 
 
 IDENTIFIER
-   : [a-z]+
+   : [a-zA-Z_]+
    ;
 
 WS

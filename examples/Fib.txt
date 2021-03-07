@@ -1,0 +1,24 @@
+int fib(int n)
+  [pre n >= 0]
+  [post __retValue__ > 0]
+{
+  int r = 0;
+  if (n == 0 || n == 1) {
+    r = 1;
+  } else {
+    int a = fib(n-1);
+    int b = fib(n-2);
+    r = a + b;
+  }
+  return r;
+}
+
+void main()
+    [pre true]
+    [post (y > 0)]
+{
+    int n = 0;
+    havoc n;
+    assume n >= 0;
+    int y = fib(n);
+}

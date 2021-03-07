@@ -39,7 +39,7 @@ Some small notations in the rules below:
   expression.
 \item $\sigma[x \to y]$ is the update of the function at position $x$ to value
   $y$.
-  
+
 \item The function $fresh$ always returns a completely new unused variable.
 \end{itemize}
 
@@ -129,13 +129,13 @@ deduction theorem and check $A \wedge \neg e[\sigma]$ for unsat.
       (T) & \config\sigma A{\mathtt{assume}~c\semi S_1} \leadsto \config{\sigma_T}{A_T}{\epsilon}\\
       (E) & \config\sigma A{\mathtt{assume}~\neg c\semi S_2}\leadsto \config{\sigma_E}{A_E}{\epsilon}\\
       %
-      (M\sigma)& \sigma' = \sigma \cup \{ v \to fresh() \mid \sigma_T[v] \neq \sigma_E[v] \}\\
+      (M\sigma)& \sigma' = \sigma \cup \{ v \mapsto fresh() \mid \sigma_T[v] \neq \sigma_E[v] \}\\
       %
       (MA)& A' = A \cup \{  \sigma(v) = \mathtt{ite}(c[\sigma],  \sigma_T[v], \sigma_E[v])   \mid \sigma_T[v] \neq \sigma_E[v]  \}
     \end{matrix}
     \quad
     \quad
-    A' 
+    A'
   }%
   {
     \config\sigma A{\mathtt{if}~(c)~S_1~\mathtt{else}~S_2}
@@ -162,7 +162,7 @@ else-branch.
       (P) &\config{\sigma}{A}{\mathtt{havoc}~E\semi\mathtt{assume}~Inv\land
         c\semi S\semi\mathtt{assert}~Inv}\\
       (T) &\config{\sigma}{A}{\mathtt{havoc}~E\semi\mathtt{assume}~Inv\land\neg
-        c} \leads \config{\sigma'}{A'}{\mathtt{skip}}
+        c} \leadsto \config{\sigma'}{A'}{\mathtt{skip}}
     \end{matrix}
   }%
   {
@@ -176,5 +176,22 @@ Note that $Inv$ is the invariant of the for the given loop, and $E$ is a set of
 variables. This sets contains all variables which are written during in the loop
 body $S$, and are therefore erased (havoc'd) when proving the preservation and
 termination of the loop.
+
+\begin{equation}
+  \frac%
+  {
+    \begin{matrix}
+      (C) &\config{id}{\{pre_f\}}{body_f\semi\mathtt{assert}~post}\\
+      (U) &A \implies pre_f[\{ x_i \mapsto ... \mid 1\leq i \leq n \}]\\
+      (T) & \sigma'=\sigma[v \mapsto fresh()]\\
+      (T) & A' = A \cup\{post_f[ \mathtt{result} / \sigma(v)\} \\
+    \end{matrix}
+  }%
+  {
+    \config\sigma A{v \mathtt{:=} f(x_1, \ldots, x_n) }
+    \leadsto
+    \config{\sigma'}{A'}{\epsilon}
+  }\mathtt{while}
+\end{equation}
 
 \end{document}
