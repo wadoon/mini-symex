@@ -2,6 +2,15 @@ plugins {
     kotlin("jvm") version "1.4.30" apply false
     id("org.sonarqube") version "3.1.1"
 }
+
+sonarqube {
+    properties {
+        property("sonar.projectKey", "wadoon_mini-symex")
+        property("sonar.organization", "wadoon")
+        property("sonar.host.url", "https://sonarcloud.io")
+    }
+}
+
 subprojects {
     group = "edu.kit.formal.kastel"
     version = "1.0-SNAPSHOT"
