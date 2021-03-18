@@ -1,3 +1,5 @@
+package edu.kit.iti.formal
+
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.default
@@ -8,12 +10,12 @@ import org.antlr.v4.runtime.CharStreams
 import java.io.PrintWriter
 
 class MiniSymEx : CliktCommand() {
-    val inputFile by argument("FILE", help = "While-program").file()
-    val printNames by option("-n", help = "print the position infos", metavar = "PROCEDURE")
+    private val inputFile by argument("FILE", help = "While-program").file()
+    private val printNames by option("-n", help = "print the position infos", metavar = "PROCEDURE")
         .flag("-N", default = true)
-    val entryPoint by option("--main", help = "print the position infos").default("main")
+    private val entryPoint by option("--main", help = "print the position infos").default("main")
 
-    val output by option("-o", "--output", help = "a file destination to write SMT to", metavar = "SMT").file(
+    private val output by option("-o", "--output", help = "a file destination to write SMT to", metavar = "SMT").file(
         mustBeWritable = true
     )
 

@@ -1,8 +1,11 @@
+package edu.kit.iti.formal
+
+import MiniPascalBaseVisitor
+import MiniPascalLexer
 import MiniPascalLexer.*
-import QuantifiedExpr.Quantifier.EXISTS
-import QuantifiedExpr.Quantifier.FORALL
-import UnaryExpr.Operator.NEGATE
-import UnaryExpr.Operator.SUB
+import MiniPascalParser
+import edu.kit.iti.formal.QuantifiedExpr.Quantifier.EXISTS
+import edu.kit.iti.formal.QuantifiedExpr.Quantifier.FORALL
 import org.antlr.v4.runtime.*
 
 /**
@@ -37,7 +40,7 @@ object ParsingFacade {
 
     @JvmStatic
     fun parseProgram(stream: CharStream): Program {
-        val (issues, ctx) = parseProgramOnly(stream)
+        val (_, ctx) = parseProgramOnly(stream)
         return ctx.accept(AstTranslator()) as Program
     }
 }
@@ -148,7 +151,7 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         else ctx.id()?.map { (it.accept(this) as Variable).withPosition(ctx) }?.toMutableList() ?: arrayListOf()
 
     override fun visitUnary(ctx: MiniPascalParser.UnaryContext) = UnaryExpr(
-        if (ctx.op.text == "!") NEGATE else SUB,
+        if (ctx.op.text == "!") UnaryExpr.Operator.NEGATE else UnaryExpr.Operator.SUB,
         ctx.expr().accept(this) as Expr
     ).withPosition(ctx)
 
@@ -174,7 +177,7 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
     override fun visitWhileStatement(ctx: MiniPascalParser.WhileStatementContext) = WhileStmt(
         ctx.cond.accept(this) as Expr,
         body(ctx.statement()),
-        loopInv = ctx.loopSpec().invariant?.accept(this) as Clauses ?: Clauses(),
+        loopInv = ctx.loopSpec().invariant?.accept(this) as Clauses? ?: Clauses(),
         erase = variables(ctx.loopSpec().variant)
     ).withPosition(ctx)
 

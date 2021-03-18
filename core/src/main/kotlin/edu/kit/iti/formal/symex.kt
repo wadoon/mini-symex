@@ -1,6 +1,7 @@
-import BinaryExpr.Operator.EQUAL
-import BinaryExpr.Operator.NOT_EQUAL
-import UnaryExpr.Operator.NEGATE
+package edu.kit.iti.formal
+
+import edu.kit.iti.formal.BinaryExpr.Operator.*
+import edu.kit.iti.formal.UnaryExpr.Operator.NEGATE
 import java.io.PrintWriter
 
 /**
@@ -10,10 +11,10 @@ import java.io.PrintWriter
  */
 var PRINT_ATTRIBUTES = true
 
-class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
+class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     inner class Scope(
         val signature: HashMap<Variable, TypeDecl> = HashMap(),
-        val variables: HashMap<Variable, MutableList<Int>> = HashMap()
+        private val variables: HashMap<Variable, MutableList<Int>> = HashMap()
     ) {
         fun sub() = Scope(
             signature = HashMap(signature),
@@ -47,10 +48,10 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
     val commands = arrayListOf<String>()
 
     private fun declareConst(t: Type, v: Variable, i: Int) {
-        if (t.dimension == 0)
-            commands += "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
+        commands += if (t.dimension == 0)
+            "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
         else
-            commands += "(declare-const ${v.id}_${i} (Array Int ${t.toSmtType()}))\n"
+            "(declare-const ${v.id}_${i} (Array Int ${t.toSmtType()}))\n"
         require(t.dimension < 2)
     }
 
@@ -88,9 +89,9 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
         return scope
     }
 
-    fun encodeExpression(expr: Expr, state: Scope): String = encodeExpression(expr, state::currentVar)
+    private fun encodeExpression(expr: Expr, state: Scope): String = encodeExpression(expr, state::currentVar)
 
-    fun encodeExpression(expr: Expr, state: (Variable) -> String): String = when (expr) {
+    private fun encodeExpression(expr: Expr, state: (Variable) -> String): String = when (expr) {
         is BinaryExpr ->
             if (expr.op == NOT_EQUAL)
                 encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), state)
@@ -154,8 +155,8 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
                             encodeExpression(expr, state)
 
                     val value = s.arrayAccess?.let {
-                        val aexpr = encodeExpression(it, state)
-                        "(store ${state.currentVar(s.id)} $aexpr $rhs)"
+                        val arrayExpr = encodeExpression(it, state)
+                        "(store ${state.currentVar(s.id)} $arrayExpr $rhs)"
                     } ?: rhs
 
                     val fresh = state.freshConst(lhs)

@@ -1,3 +1,7 @@
+package edu.kit.iti.formal
+
+import MiniPascalLexer
+import SMTLIBv2Lexer
 import javafx.geometry.Orientation
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
@@ -25,26 +29,20 @@ import java.util.*
  * @author Alexander Weigl
  * @version 1 (3/18/21)
  */
-
 fun main(args: Array<String>) {
     launch<MiniSymExUi>(args)
 }
 
-class MiniSymExUi : App(MiniSymExView::class, MyStyle::class) {
-    init {
-        //reloadStylesheetsOnFocus()
-        //dumpStylesheets()
-    }
-}
+class MiniSymExUi : App(MiniSymExView::class, MyStyle::class)
 
 class MiniSymExView : View() {
-    val iconLoad = FontIcon(FontAwesomeRegular.FOLDER_OPEN)
-    val iconSave = FontIcon(FontAwesomeRegular.SAVE)
-    val iconSaveAs = FontIcon(FontAwesomeSolid.SAVE)
-    val iconTranslate = FontIcon(FontAwesomeRegular.PLAY_CIRCLE)
+    private val iconLoad = FontIcon(FontAwesomeRegular.FOLDER_OPEN)
+    private val iconSave = FontIcon(FontAwesomeRegular.SAVE)
+    private val iconSaveAs = FontIcon(FontAwesomeSolid.SAVE)
+    private val iconTranslate = FontIcon(FontAwesomeRegular.PLAY_CIRCLE)
 
-    val codeEditor = CodeArea()
-    val smtEditor = CodeArea().also { area ->
+    private val codeEditor = CodeArea()
+    private val smtEditor = CodeArea().also { area ->
         val stream = EventStreams.changesOf(area.textProperty())
         stream.successionEnds(Duration.ofMillis(100)) //wait 500ms before responds
             .forgetful()
@@ -61,14 +59,15 @@ class MiniSymExView : View() {
                 try {
                     area.setStyleSpans(0, spansBuilder.create())
                 } catch (ignore: IndexOutOfBoundsException) {
+                    //ignore
                 }
             }
     }
 
 
-    val fileChooser by lazy { FileChooser() }
+    private val fileChooser by lazy { FileChooser() }
 
-    var lastOpenedFile: File? = null
+    private var lastOpenedFile: File? = null
 
     override val root = vbox {
         toolbar(
@@ -99,7 +98,7 @@ class MiniSymExView : View() {
                     if (main != null) {
                         symEx.proveBody(main)
                         val buffer = StringBuilder()
-                        var indent = 0;
+                        var indent = 0
                         symEx.commands.joinTo(buffer, "\n") {
                             val t = ("    " * indent) + it
                             if (it.startsWith("(pop"))
@@ -165,11 +164,11 @@ class MiniSymExView : View() {
             val pos = e.screenPosition
             val issue = issues.find { it.from <= chIdx && chIdx <= it.to }
             issue?.let {
-                popupMsg.setText(it.message)
+                popupMsg.text = it.message
                 popup.show(codeEditor, pos.x, pos.y + 10)
             }
         }
-        codeEditor.addEventHandler(MouseOverTextEvent.MOUSE_OVER_TEXT_END) { e -> popup.hide() }
+        codeEditor.addEventHandler(MouseOverTextEvent.MOUSE_OVER_TEXT_END) { popup.hide() }
 
 
     }
@@ -188,17 +187,19 @@ class MiniSymExView : View() {
         try {
             codeEditor.setStyleSpans(0, spansBuilder.create())
         } catch (ignore: IndexOutOfBoundsException) {
+            //ignore
         }
         try {
             issues.forEach {
                 codeEditor.setStyle(it.from, it.to + 1, Collections.singleton("error"))
             }
         } catch (ignore: IndexOutOfBoundsException) {
+            //ignore
         }
     }
 }
 
-private operator fun String.times(indent: Int): String = (1..indent).map { this }.joinToString("")
+private operator fun String.times(indent: Int): String = (1..indent).joinToString("") { this }
 
 
 class MyStyle : Stylesheet() {
@@ -207,7 +208,7 @@ class MyStyle : Stylesheet() {
         val text by cssclass()
         val literal by cssclass()
         val keyword by cssclass()
-        val vkeyword by cssclass()
+        val verification_keyword by cssclass()
         val operator by cssclass()
         val comment by cssclass()
         val error by cssclass()
@@ -229,7 +230,7 @@ class MyStyle : Stylesheet() {
             underline = true
         }
 
-        vkeyword {
+        verification_keyword {
             underline = true
             fontStyle = FontPosture.ITALIC
             fill = c("green")
@@ -282,7 +283,7 @@ private fun translatePascalToStyleNames(type: Int): String = when (type) {
     MiniPascalLexer.HAVOC,
     MiniPascalLexer.ASSUME,
     MiniPascalLexer.ASSERT ->
-        "vkeyword"
+        "verification_keyword"
 
     MiniPascalLexer.COLON,
     MiniPascalLexer.SEMI,
@@ -316,7 +317,7 @@ private fun translatePascalToStyleNames(type: Int): String = when (type) {
 private fun translateSmtLibToStyleNames(type: Int, vok: Vocabulary): String {
     val name = vok.getSymbolicName(type)
     return when {
-        name.startsWith("CMD") -> "vkeyword"
+        name.startsWith("CMD") -> "verification_keyword"
         name.startsWith("PS") -> "keyword"
         name.startsWith("GRW") -> "keyword"
         name.startsWith("PK") -> "operator"
