@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "1.4.30" apply false
+    id("org.sonarqube") version "3.1.1"
 }
 subprojects {
     group = "edu.kit.formal.kastel"
