@@ -35,27 +35,30 @@ grammar MiniPascal;
 program: (procedure|function)+;
 
 procedure
-   : 'procedure' name=id '(' a=binders?  ')' ';'?
+   : PROCEDURE name=id '(' a=binders?  ')' ';'?
       var
       spec
       body
    ;
+
 
 function
-   : 'function' name=id '(' a=binders?  ')' ':' type ';'?
+   : FUNCTION name=id '(' a=binders?  ')' ':' type ';'?
       var
       spec
       body
    ;
 
-var: 'var' (varDecl)*;
-varDecl: type id ':=' rhs=expr ';';
+var: 'var' (varDecl (';' varDecl)* ';'?)?;
+varDecl: ids ':' type (':=' rhs=expr)?;
 
+namedexpr: (id ':')? expr;
+namedexprs: namedexpr ((';') namedexpr)*;
 spec:
-      ('[' 'pre'        pre=expr ']')?
-      ('[' 'post'       post=expr ']')?
-      ('[' 'modifies'   modifies=ids ']')?
-     ;
+      ('pre'      pre=namedexprs)?
+      ('post'     post=namedexprs)?
+      ('modifies' modifies=ids)?
+    ;
 
 binders: id ':' type  (','  id ':' type)*;
 ids: id (',' id)*;
@@ -66,35 +69,38 @@ ifStatement
    ;
 
 whileStatement
-   : 'while' cond=expr 'do'
+   : 'while' cond=expr
       loopSpec
+      'do'
       statement
    ;
 
 loopSpec
-   :  ('[' 'invariant' invariant=expr ']')?
-      ('[' ('modifies'|'variant')   variant=ids ']')?
-   ;
+    :  (INVARIANT        invariant=namedexprs)?
+       ((MODIFIES|VARIANT) variant=ids)?
+    ;
 
 body
-   : 'begin' (statement (';' statement))* ';'? 'end'
-   ;
+    : BEGIN statement (';' statement)* ';'? END
+    ;
 
 assignment
-   : id ('[' aa=expr ']')? ':=' rhs=expr
+   : id ('[' aa=expr ']')? ASSIGN rhs=expr
    ;
 
 primitiveTypes: 'int'|'bool';
 
 type
-   : t=primitiveTypes (a='[]')?
+   : t=primitiveTypes (a=LBRACKET RBRACKET)?
+   | 'array' 'of' primitiveTypes
    ;
+
 
 emptyStmt: ';';
 
-assert_: 'assert' '(' expr  ')';
-assume: 'assume' '('expr')';
-havoc: 'havoc' '(' ids ')';
+assert_: ASSERT ( '(' namedexprs ')' | namedexprs);
+assume:  ASSUME ( '(' namedexprs ')' | namedexprs);
+havoc:   HAVOC  ( '(' ids ')' | ids);
 
 
 statement
@@ -105,25 +111,24 @@ statement
    | assert_
    | assume
    | havoc
-   //| emptyStmt
    ;
 
 expr
-  : expr op=('+'|'-') expr
-  | expr op=('*'|'/'|'%') expr
-  | expr op='&&' expr
-  | expr op='||' expr
-  | expr op='^' expr
-  | expr op=('<'|'<='|'>'|'>=') expr
-  | expr op=('=='|'!=') expr
-  | expr op='==>' expr
+  : expr op=(PLUS|MINUS) expr
+  | expr op=(MUL|DIV|MOD) expr
+  | expr op=AND expr
+  | expr op=OR expr
+  | expr op=XOR expr
+  | expr op=(LT|LTE|GTE|GT) expr
+  | expr op=(EQUAL|NOT_EQUAL) expr
+  | expr op=IMPL expr
   | primary
   ;
 
 primary
-   : id       # ignore1
-   | INT      #integer
-   | BOOL      #bool
+   : id       #ignore1
+   | INT_LITERAL      #integer
+   | BOOL_LITERAL     #bool
    | op=('!'|'-') expr #unary
    | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
    | '\\let'  type id '=' expr #letExpr
@@ -134,27 +139,87 @@ primary
 
 exprList: expr (',' expr)*;
 
+PROCEDURE: 'procedure';
+FUNCTION: 'function';
+VAR: 'var';
+COMMA: ',';
+BANG:'!';
+FORALL:'\\forall';
+EXISTS:'\\exists';
+SEMI: ';';
+COLON:':';
+MINUS:'-';
+ARRAY: 'array';
+OF: 'of';
+IMPL:'==>';
+EQUAL:'=';
+NOT_EQUAL:'<>';
+LT:'<';
+GT:'>';
+LTE:'<=';
+GTE:'>=';
+MOD:'%' | 'mod';
+OR:'||' | 'or';
+AND:'&&' | 'and';
+ASSIGN:':=';
+LET: '\\let';
+LPAREN:'(';
+RPAREN:')';
+LBRACKET:'[';
+RBRACKET:']';
+PLUS:'+';
+XOR:'^';
+MUL:'*';
+DIV:'/';
+INVARIANT:'invariant';
+MODIFIES:'modifies';
+VARIANT:'variant';
+BEGIN:'begin';
+END:'end';
+PRE:'pre';
+POST:'post';
+WHILE:'while';
+DO:'do';
+IF:'if';
+THEN:'then';
+ELSE: 'else';
+INT: 'int';
+BOOL: 'bool';
+HAVOC: 'havoc';
+ASSUME: 'assume';
+ASSERT: 'assert';
+
 id
    : IDENTIFIER
    ;
 
-STRING
+
+
+STRING_LITERAL
    : '"' ~["]* '"'
    ;
 
-INT
+INT_LITERAL
    : [0-9] +
    ;
 
-BOOL
+BOOL_LITERAL
    : 'true' | 'false'
    ;
-
 
 IDENTIFIER
    : [a-zA-Z_]+
    ;
 
+BLOCK_COMMENT
+   : '(*' (BLOCK_COMMENT|.)*? '*)' -> channel(HIDDEN)
+   ;
+
+LINE_COMMENT
+   : '//' ~([\n\r]) [\n\r] -> channel(HIDDEN)
+   ;
+
+
 WS
-   : [ \r\n\t] -> skip
+   : [ \r\n\t] -> channel(HIDDEN)
    ;

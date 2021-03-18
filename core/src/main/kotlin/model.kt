@@ -22,9 +22,12 @@ data class Program(val procedures: MutableList<Procedure>) : Node() {
 }
 
 data class Procedure(
-    var name: String, val args: MutableList<Pair<TypeDecl, Variable>>, val body: Body,
-    var requires: Expr = BoolLit(true),
-    var ensures: Expr = BoolLit(true),
+    var name: String,
+    val signature: MutableList<Pair<TypeDecl, Variable>>,
+    val args: MutableList<Pair<TypeDecl, Variable>>,
+    val body: Body,
+    var requires: Clauses = Clauses(),
+    var ensures: Clauses = Clauses(),
     var modifies: MutableList<Variable> = arrayListOf(),
     var returnType: TypeDecl = TypeDecl("void")
 ) : Node() {
@@ -100,22 +103,25 @@ data class FunctionCall(var id: Variable, val args: MutableList<Expr>) : Expr()
 
 data class ArrayAccess(var id: Variable, val args: MutableList<Expr>) : Expr()
 
+data class Clauses(private val intern: MutableList<Pair<Variable?, Expr>> = arrayListOf()) :
+    MutableList<Pair<Variable?, Expr>> by intern,
+    Node()
 
 sealed class Statement : Node()
 data class HavocStmt(var ids: MutableList<Variable>) : Statement()
 
-data class AssumeStmt(var cond: Expr) : Statement() {
+data class AssumeStmt(var cond: Clauses) : Statement() {
     var description: String? = null
 
-    constructor(cond: Expr, desc: String) : this(cond) {
+    constructor(cond: Clauses, desc: String) : this(cond) {
         description = desc
     }
 }
 
-data class AssertStmt(var cond: Expr) : Statement() {
+data class AssertStmt(var cond: Clauses) : Statement() {
     var description: String? = null
 
-    constructor(cond: Expr, desc: String) : this(cond) {
+    constructor(cond: Clauses, desc: String) : this(cond) {
         description = desc
     }
 
@@ -127,7 +133,7 @@ data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body) : Stateme
 
 data class WhileStmt(
     var cond: Expr, var then: Body,
-    var loopInv: Expr = BoolLit(true),
+    var loopInv: Clauses = Clauses(),
     var erase: MutableList<Variable> = arrayListOf()
 ) : Statement()
 
@@ -201,3 +207,6 @@ fun Expr.toHuman(): String = when (this) {
     is Variable -> id
     is ArrayAccess -> TODO()
 }
+
+internal fun Clauses.toHuman(): String =
+    joinToString { (v, t) -> (v?.toHuman() ?: "<empty>") + ":" + t.toHuman() }

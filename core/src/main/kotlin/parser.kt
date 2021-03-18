@@ -1,28 +1,43 @@
+import MiniPascalLexer.*
 import QuantifiedExpr.Quantifier.EXISTS
 import QuantifiedExpr.Quantifier.FORALL
 import UnaryExpr.Operator.NEGATE
 import UnaryExpr.Operator.SUB
-import org.antlr.v4.runtime.CharStream
-import org.antlr.v4.runtime.CommonTokenStream
-import org.antlr.v4.runtime.ParserRuleContext
+import org.antlr.v4.runtime.*
 
 /**
  *
  * @author Alexander Weigl
  * @version 1 (2/25/21)
  */
-
 object ParsingFacade {
     @JvmStatic
-    fun parseProgram(stream: CharStream): Program {
+    fun parseProgramOnly(stream: CharStream): Pair<List<Issue>, MiniPascalParser.ProgramContext> {
         val lexer = MiniPascalLexer(stream)
         val parser = MiniPascalParser(CommonTokenStream(lexer))
-        val ctx = parser.program()
-
-        require(parser.numberOfSyntaxErrors == 0) {
-            "Syntax Errors!"
+        val issues = arrayListOf<Issue>()
+        val errorDiagnosticErrorListener = object : BaseErrorListener() {
+            override fun syntaxError(
+                recognizer: Recognizer<*, *>?,
+                offendingSymbol: Any?,
+                line: Int,
+                charPositionInLine: Int,
+                msg: String,
+                e: RecognitionException?
+            ) {
+                val tok = offendingSymbol as Token
+                issues.add(Issue(tok.startIndex, tok.stopIndex, msg))
+                System.err.println("line $line:$charPositionInLine $msg")
+            }
         }
+        parser.addErrorListener(errorDiagnosticErrorListener)
+        val ctx = parser.program()
+        return issues to ctx
+    }
 
+    @JvmStatic
+    fun parseProgram(stream: CharStream): Program {
+        val (issues, ctx) = parseProgramOnly(stream)
         return ctx.accept(AstTranslator()) as Program
     }
 }
@@ -70,15 +85,54 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
 
     override fun visitProcedure(ctx: MiniPascalParser.ProcedureContext): Node {
         val b = ctx.body().accept(this) as Body
+        val signature = vars(ctx.`var`())
         val args = binders(ctx.a)
 
         return Procedure(
-            ctx.name.text, args, b,
-            requires = ctx.spec().pre?.accept(this) as? Expr? ?: TRUE,
-            ensures = ctx.spec().post?.accept(this) as? Expr? ?: TRUE,
+            ctx.name.text, signature, args, b,
+            requires = ctx.spec().pre?.accept(this) as? Clauses ?: Clauses(),
+            ensures = ctx.spec().post?.accept(this) as? Clauses ?: Clauses(),
             modifies = variables(ctx.spec().modifies)
         ).withPosition(ctx)
     }
+
+    override fun visitNamedexprs(ctx: MiniPascalParser.NamedexprsContext): Node {
+        val clauses = Clauses()
+        ctx.namedexpr().forEach {
+            val v = it.id()?.accept(this) as Variable?
+            val e = it.expr().accept(this) as Expr
+            clauses.add(v to e)
+        }
+        return clauses
+    }
+
+    override fun visitFunction(ctx: MiniPascalParser.FunctionContext): Node {
+        val b = ctx.body().accept(this) as Body
+        val signature = vars(ctx.`var`())
+        val args = binders(ctx.a)
+
+        return Procedure(
+            ctx.name.text, signature, args, b,
+            requires = ctx.spec().pre?.accept(this) as? Clauses ?: Clauses(),
+            ensures = ctx.spec().post?.accept(this) as? Clauses ?: Clauses(),
+            modifies = variables(ctx.spec().modifies),
+            returnType = ctx.type().accept(this) as TypeDecl
+        ).withPosition(ctx)
+    }
+
+    private fun vars(ctx: MiniPascalParser.VarContext?): MutableList<Pair<TypeDecl, Variable>> =
+        if (ctx == null) arrayListOf()
+        else {
+            val m = arrayListOf<Pair<TypeDecl, Variable>>()
+            (ctx.varDecl()).forEach {
+                val t = type(it.type()) as TypeDecl
+                it.ids().id().forEach { id ->
+                    val v = id.accept(this) as Variable
+                    m.add(t to v)
+                }
+            }
+            m
+        }
 
     private fun binders(ctx: MiniPascalParser.BindersContext?): MutableList<Pair<TypeDecl, Variable>> =
         if (ctx == null) arrayListOf()
@@ -97,8 +151,6 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         if (ctx.op.text == "!") NEGATE else SUB,
         ctx.expr().accept(this) as Expr
     ).withPosition(ctx)
-
-    val TRUE = BoolLit(true)
 
     override fun visitIfStatement(ctx: MiniPascalParser.IfStatementContext): Node {
         return IfStmt(
@@ -122,7 +174,7 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
     override fun visitWhileStatement(ctx: MiniPascalParser.WhileStatementContext) = WhileStmt(
         ctx.cond.accept(this) as Expr,
         body(ctx.statement()),
-        ctx.loopSpec().invariant?.accept(this) as Expr,
+        loopInv = ctx.loopSpec().invariant?.accept(this) as Clauses ?: Clauses(),
         erase = variables(ctx.loopSpec().variant)
     ).withPosition(ctx)
 
@@ -139,7 +191,8 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         return TypeDecl(type.t.text, type.a != null).withPosition(type)
     }
 
-    override fun visitBool(ctx: MiniPascalParser.BoolContext): Node = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
+    override fun visitBool(ctx: MiniPascalParser.BoolContext): Node =
+        BoolLit(ctx.BOOL_LITERAL().text == "true").withPosition(ctx)
 
     override fun visitExpr(ctx: MiniPascalParser.ExprContext): Node {
         if (ctx.primary() != null) {
@@ -152,31 +205,32 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         }
         return BinaryExpr(
             ctx.expr(0).accept(this) as Expr,
-            binaryOperator(ctx.op.text),
+            binaryOperator(ctx.op.type),
             ctx.expr(1).accept(this) as Expr
         ).withPosition(ctx)
     }
 
-    private fun binaryOperator(text: String): BinaryExpr.Operator =
+    private fun binaryOperator(text: Int): BinaryExpr.Operator =
         when (text) {
-            "+" -> BinaryExpr.Operator.ADD
-            "-" -> BinaryExpr.Operator.SUB
-            "*" -> BinaryExpr.Operator.MUL
-            "/" -> BinaryExpr.Operator.DIV
-            "%" -> BinaryExpr.Operator.MOD
-            "<" -> BinaryExpr.Operator.LT
-            "<=" -> BinaryExpr.Operator.LTE
-            ">" -> BinaryExpr.Operator.GT
-            ">=" -> BinaryExpr.Operator.GTE
-            "==" -> BinaryExpr.Operator.EQUAL
-            "!=" -> BinaryExpr.Operator.NOT_EQUAL
-            "&" -> BinaryExpr.Operator.AND
-            "|" -> BinaryExpr.Operator.OR
-            "==>" -> BinaryExpr.Operator.IMPLIES
+            PLUS -> BinaryExpr.Operator.ADD
+            MINUS -> BinaryExpr.Operator.SUB
+            MUL -> BinaryExpr.Operator.MUL
+            DIV -> BinaryExpr.Operator.DIV
+            MOD -> BinaryExpr.Operator.MOD
+            LT -> BinaryExpr.Operator.LT
+            LTE -> BinaryExpr.Operator.LTE
+            GT -> BinaryExpr.Operator.GT
+            GTE -> BinaryExpr.Operator.GTE
+            EQUAL -> BinaryExpr.Operator.EQUAL
+            NOT_EQUAL -> BinaryExpr.Operator.NOT_EQUAL
+            AND -> BinaryExpr.Operator.AND
+            OR -> BinaryExpr.Operator.OR
+            IMPL -> BinaryExpr.Operator.IMPLIES
             else -> throw IllegalArgumentException("Unknown operator '$text'.")
         }
 
-    override fun visitInteger(ctx: MiniPascalParser.IntegerContext) = IntLit(ctx.INT().text.toBigInteger()).withPosition(ctx)
+    override fun visitInteger(ctx: MiniPascalParser.IntegerContext) =
+        IntLit(ctx.INT_LITERAL().text.toBigInteger()).withPosition(ctx)
 
     override fun visitFcall(ctx: MiniPascalParser.FcallContext) = FunctionCall(
         ctx.id().accept(this) as Variable,
@@ -188,10 +242,10 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
 
     override fun visitEmptyStmt(ctx: MiniPascalParser.EmptyStmtContext) = EmptyStmt().withPosition(ctx)
     override fun visitAssert_(ctx: MiniPascalParser.Assert_Context) =
-        AssertStmt(ctx.expr().accept(this) as Expr).withPosition(ctx)
+        AssertStmt(ctx.namedexprs().accept(this) as Clauses).withPosition(ctx)
 
     override fun visitAssume(ctx: MiniPascalParser.AssumeContext) =
-        AssumeStmt(ctx.expr().accept(this) as Expr).withPosition(ctx)
+        AssumeStmt(ctx.namedexprs().accept(this) as Clauses).withPosition(ctx)
 
     override fun visitHavoc(ctx: MiniPascalParser.HavocContext) = HavocStmt(
         ctx.ids().id().map { it.accept(this) as Variable }.toMutableList()
@@ -199,3 +253,6 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
 
     override fun visitId(ctx: MiniPascalParser.IdContext) = Variable(ctx.IDENTIFIER().text)
 }
+
+
+data class Issue(val from: Int, val to: Int, val message: String)

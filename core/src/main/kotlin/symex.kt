@@ -36,6 +36,10 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
             declareConst(t.toType(), id, fresh)
             return currentVar(id)
         }
+
+        fun introduce(signature: MutableList<Pair<TypeDecl, Variable>>) {
+            signature.forEach { (t, v) -> this.signature[v] = t }
+        }
     }
 
     private val vcgGenerated = HashSet<String>()
@@ -235,6 +239,14 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
         }
     }
 
+    private fun encodeExpression(clauses: Clauses, scope: Scope): String {
+        val namedExpr = clauses.map { (name, expr) ->
+            encodeExpression(expr, scope).named(name?.id)
+        }
+        return if (namedExpr.isEmpty()) "true"
+        else "(and ${namedExpr.joinToString(" ")})"
+    }
+
 
     private fun encodeFunctionCallExpression(expr: FunctionCall, state: Scope): String {
         val function = procedures.find { it.name == expr.id.id }
@@ -277,16 +289,20 @@ class SymEx2(val procedures: List<Procedure> = arrayListOf()) {
 
     fun proveBody(function: Procedure) {
         val proofObligation = Body(arrayListOf())
+        val scope = Scope()
+        scope.introduce(function.signature)
         proofObligation.statements.add(AssumeStmt(function.requires, "pre-condition of ${function.name}"))
         proofObligation.statements.add(function.body)
         proofObligation.statements.add(AssertStmt(function.ensures, "post-condition of ${function.name}"))
-        executeStatement(proofObligation)
+        executeStatement(function.body, scope)
     }
+
 
     fun encodeInto(out: PrintWriter) {
         commands.forEach { out.println(it) }
     }
 }
+
 
 private fun String.named(s: String?): String = if (PRINT_ATTRIBUTES && s != null) "(! $this :named \"$s\")" else this
 private fun String.position(p: Position?): String =
