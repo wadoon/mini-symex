@@ -34,3 +34,10 @@ tasks.generateGrammarSource {
     maxHeapSize = "64m"
     arguments = arguments + listOf("-visitor", "-long-messages")
 }
+
+val classes by tasks.existing {
+    dependsOn(":generateGrammarSource")
+}
+
+
+
