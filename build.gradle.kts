@@ -7,7 +7,8 @@ sonarqube {
     properties {
         property("sonar.projectKey", "wadoon_mini-symex")
         property("sonar.organization", "wadoon")
-        property("sonar.host.url", "https://sonarcloud.io")
+        property("sonar.host.url", "https://sonarcloud.io")        
+        property("sonar.exclusions", "**/build/generated-src/antlr/main/**")
     }
 }
 
