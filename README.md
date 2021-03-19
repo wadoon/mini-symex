@@ -17,6 +17,13 @@ One of the goal is the linkage between a VC and the logical terms back to the or
 $ ./gradlew :core:installDist :ui:installDist
 ```
 
+## TODO
+
+* [ ] implement `Length(x)` function
+* [ ] write all positional information in the attributes
+* [ ] make binary search work
+* [ ] test cases
+
 ## Meta Information
 
 We use the attribute-facility of SMT to provide positional meta information of terms 
