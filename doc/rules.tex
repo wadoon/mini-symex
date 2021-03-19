@@ -131,7 +131,7 @@ deduction theorem and check $A \wedge \neg e[\sigma]$ for unsat.
       %
       (M\sigma)& \sigma' = \sigma \cup \{ v \mapsto fresh() \mid \sigma_T[v] \neq \sigma_E[v] \}\\
       %
-      (MA)& A' = A \cup \{  \sigma(v) = \mathtt{ite}(c[\sigma],  \sigma_T[v], \sigma_E[v])   \mid \sigma_T[v] \neq \sigma_E[v]  \}
+      (MA)& A' = A \cup \{  \sigma'(v) = \mathtt{ite}(c[\sigma],  \sigma_T[v], \sigma_E[v])   \mid \sigma_T[v] \neq \sigma_E[v]  \}
     \end{matrix}
     \quad
     \quad
