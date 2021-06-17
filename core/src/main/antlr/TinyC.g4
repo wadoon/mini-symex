@@ -91,6 +91,7 @@ statement
    | assert_
    | assume
    | havoc
+   | choose
    | emptyStmt
    ;
 

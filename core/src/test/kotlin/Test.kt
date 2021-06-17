@@ -1,7 +1,9 @@
+import edu.kit.iti.formal.MiniSymEx
 import edu.kit.iti.formal.ParsingFacade
 import edu.kit.iti.formal.SymEx2
 import org.antlr.v4.runtime.CharStreams
 import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
 import java.io.File
 import java.io.FilenameFilter
@@ -16,7 +18,7 @@ import java.util.stream.Stream
 object Test {
     @TestFactory
     fun testAllExamples(): Stream<DynamicTest> =
-        Arrays.stream(File("../examples").listFiles(PAS_FILTER)).map {s->
+        Arrays.stream(File("../examples").listFiles(PasFilter)).map { s->
             DynamicTest.dynamicTest(s.name) {
                 parseAndLoad(s)
             }
@@ -29,6 +31,13 @@ object Test {
         symEx.proveBody(b)
     }
 
+    @Test
+    fun testAngel() {
+
+        MiniSymEx().main(arrayListOf("../examples/Angels.c"))
+    }
+
+    @Test
     fun main() {
         val p = """
 void main() {
@@ -43,7 +52,7 @@ void main() {
     }          
     assert a != 1;
 }
-        """.trimIndent();
+        """.trimIndent()
 
         val program = ParsingFacade.parseProgramC(CharStreams.fromString(p))
         val symEx = SymEx2()
@@ -51,7 +60,6 @@ void main() {
     }
 }
 
-object PAS_FILTER : FilenameFilter {
+object PasFilter : FilenameFilter {
     override fun accept(dir: File?, name: String)=name.endsWith("pas")
-
 }

@@ -89,6 +89,7 @@ private class PasAstTranslator : MiniPascalBaseVisitor<Node>() {
             .withPosition(ctx)
     }
 
+    @Suppress("UNCHECKED_CAST")
     private fun <T> map(ctx: List<ParserRuleContext>) =
         ctx.map { it.accept(this) as T }.toMutableList()
 
@@ -232,8 +233,7 @@ private class PasAstTranslator : MiniPascalBaseVisitor<Node>() {
     override fun visitExpr(ctx: MiniPascalParser.ExprContext): Node {
         if (ctx.primary() != null) {
             try {
-                val v = ctx.primary().accept(this)
-                return v
+                return ctx.primary().accept(this)
             } catch (e: NullPointerException) {
                 println(ctx.text)
                 throw e
@@ -311,6 +311,7 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
             .withPosition(ctx)
     }
 
+    @Suppress("UNCHECKED_CAST")
     private fun <T> map(ctx: List<ParserRuleContext>) =
         ctx.map { it.accept(this) as T }.toMutableList()
 
@@ -363,8 +364,6 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
         if (ctx.op.text == "!") UnaryExpr.Operator.NEGATE else UnaryExpr.Operator.SUB,
         ctx.expr().accept(this) as Expr
     ).withPosition(ctx)
-
-    val TRUE = BoolLit(true)
 
     override fun visitIfStatement(ctx: TinyCParser.IfStatementContext): Node {
         return IfStmt(
@@ -471,7 +470,7 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
 
 
     override fun visitChoose(ctx: TinyCParser.ChooseContext): Node
-            = ChooseStmt(ctx.id() as Variable, ctx.expr() as Expr).withPosition(ctx)
+            = ChooseStmt(ctx.id().accept(this) as Variable, ctx.expr().accept(this) as Expr).withPosition(ctx)
 }
 
 data class Issue(val from: Int, val to: Int, val message: String)

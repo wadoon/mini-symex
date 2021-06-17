@@ -12,11 +12,10 @@ import java.io.PrintWriter
 class MiniSymEx : CliktCommand() {
     private val inputFile by argument("FILE", help = "While-program").file()
     private val printNames by option("-n", help = "print the position infos", metavar = "PROCEDURE")
-        .flag("-N", default = true)
-    private val entryPoint by option("--main", help = "print the position infos").default("main")
+        .flag("-N", default = false)
+    private val entryPoint by option("--main", help = "name of the entry point (verification subject)").default("main")
 
-    private val unrollings by option("-r", "--unroll")
-        .associate(":")
+    private val unrollings by option("-r", "--unroll").associate(":")
 
     private val unrollings0 by lazy {
         unrollings.map { (k, v) -> k to v.toInt() }.toMap()

@@ -56,6 +56,11 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
             val typ = TypeDecl("int", false)
             return len to typ
         }
+
+        fun type(variable: Variable): String {
+            return signature[variable]?.toSmtType()
+                ?: throw RuntimeException("Unknown variable ${variable.toHuman()}")
+        }
     }
 
     private val vcgGenerated = HashSet<String>()
@@ -109,7 +114,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     private fun encodeExpression(expr: Expr, vars: (Variable) -> String, state: Scope): String = when (expr) {
         is BinaryExpr ->
             if (expr.op == NOT_EQUAL) {
-                encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), vars,state)
+                encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), vars, state)
             } else {
                 "(${expr.op.smtSymbol} ${encodeExpression(expr.left, vars, state)} ${
                     encodeExpression(expr.right, vars, state)
@@ -117,7 +122,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
             }
         is FunctionCall -> encodeFunctionCallExpression(expr, state)
         is IntLit -> expr.value.toString()
-        is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, vars,state)})"
+        is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, vars, state)})"
         is Variable -> vars(expr)
         is BoolLit -> expr.value.toString()
         is QuantifiedExpr -> {
@@ -142,7 +147,14 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     fun executeStatement(s: Statement, state: Scope = Scope()): Scope {
         return when (s) {
             is ChooseStmt -> {
-                TODO()
+                //havoc
+                state.freshConst(s.variable)
+                val expr = encodeExpression(s.expr,
+                    {x:Variable -> if (x == s.variable) "_x" else state.currentVar(x) },
+                    state)
+                assume("(exists ((_x ${state.type(s.variable)})) " +
+                        "(and (= _x ${state.currentVar(s.variable)}) $expr))")
+                state
             }
             is AssertStmt -> {
                 val e = encodeExpression(s.cond, state)
