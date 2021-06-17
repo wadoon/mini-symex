@@ -1,3 +1,4 @@
 rootProject.name = "mini-symex"
 
-include(":core", ":ui")
+include(":core")
+//include(":ui")
