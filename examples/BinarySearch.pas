@@ -11,6 +11,7 @@ begin
       while L <= R && run
       do
       begin
+        (* choose I : R <= I <= L *)
         I := L + (R - L) div 2;
         Cur := A[I];
         if X = Cur then

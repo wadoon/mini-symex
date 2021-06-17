@@ -33,7 +33,6 @@ object Test {
 
     @Test
     fun testAngel() {
-
         MiniSymEx().main(arrayListOf("../examples/Angels.c"))
     }
 

@@ -90,7 +90,7 @@ open class MutableVisitor() : Visitor<Unit> {
     }
 
     override fun visit(n: ChooseStmt) {
-        n.variable.accept(this)
+        n.variables.forEach { it.accept(this) }
         n.expr.accept(this)
     }
 }

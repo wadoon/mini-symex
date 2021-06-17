@@ -76,7 +76,7 @@ emptyStmt: ';';
 assert_: 'assert' expr ';';
 assume: 'assume' expr ';';
 havoc: 'havoc' ids ';';
-choose: 'choose' id ':' expr ';';
+choose: 'choose' ids ':' expr ';';
 
 
 returnStatement: 'return' expr;

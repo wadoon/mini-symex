@@ -143,18 +143,10 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         }
     }
 
-
     fun executeStatement(s: Statement, state: Scope = Scope()): Scope {
         return when (s) {
             is ChooseStmt -> {
-                //havoc
-                state.freshConst(s.variable)
-                val expr = encodeExpression(s.expr,
-                    {x:Variable -> if (x == s.variable) "_x" else state.currentVar(x) },
-                    state)
-                assume("(exists ((_x ${state.type(s.variable)})) " +
-                        "(and (= _x ${state.currentVar(s.variable)}) $expr))")
-                state
+                error("choose statement not possible with this engine")
             }
             is AssertStmt -> {
                 val e = encodeExpression(s.cond, state)
@@ -335,10 +327,10 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
 }
 
 
-private fun String.named(s: String?): String = if (PRINT_ATTRIBUTES && s != null) "(! $this :named \"$s\")" else this
-private fun String.position(p: Position?): String =
+fun String.named(s: String?): String = if (PRINT_ATTRIBUTES && s != null) "(! $this :named \"$s\")" else this
+fun String.position(p: Position?): String =
     if (PRINT_ATTRIBUTES && p != null) "(! $this :source-file \"${p.source}\" :start ${p.startOffset} :end ${p.endOffset})" else this
 
 
-private fun TypeDecl.toSmtType(): String = toType().toSmtType()
-private fun Type.toSmtType(): String = name.capitalize()
+fun TypeDecl.toSmtType(): String = toType().toSmtType()
+fun Type.toSmtType(): String = name.capitalize()

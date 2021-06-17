@@ -162,7 +162,7 @@ data class HavocStmt(var ids: MutableList<Variable>) : Statement() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
-data class ChooseStmt(var variable: Variable, var expr: Expr) : Statement() {
+data class ChooseStmt(var variables: MutableList<Variable>, var expr: Expr) : Statement() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
@@ -190,7 +190,7 @@ data class Body(val statements: MutableList<Statement> = arrayListOf()) : Statem
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
-data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body? = null) : Statement() {
+data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body = Body()) : Statement() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 

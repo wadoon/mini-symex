@@ -57,5 +57,5 @@ ${n.otherwise?.accept(this) ?: ""}
     override fun visit(n: FunctionCall): String =
         "${n.id.accept(this)}(${n.args.joinToString(", ") { it.accept(this) }})"
 
-    override fun visit(n: ChooseStmt): String = "choose ${n.variable.accept(this)} : ${n.expr.accept(this)};"
+    override fun visit(n: ChooseStmt): String = "choose ${n.variables.joinToString(", ") {  it.accept(this) }} : ${n.expr.accept(this)};"
 }

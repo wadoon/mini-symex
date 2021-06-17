@@ -469,8 +469,11 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     override fun visitId(ctx: TinyCParser.IdContext) = Variable(ctx.IDENTIFIER().text)
 
 
-    override fun visitChoose(ctx: TinyCParser.ChooseContext): Node
-            = ChooseStmt(ctx.id().accept(this) as Variable, ctx.expr().accept(this) as Expr).withPosition(ctx)
+    override fun visitChoose(ctx: TinyCParser.ChooseContext): Node =
+        ChooseStmt(
+            ctx.ids().id().map { it.accept(this) as Variable }.toMutableList(),
+            ctx.expr().accept(this) as Expr)
+            .withPosition(ctx)
 }
 
 data class Issue(val from: Int, val to: Int, val message: String)

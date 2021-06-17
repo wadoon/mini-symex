@@ -10,6 +10,8 @@ import com.github.ajalt.clikt.parameters.types.file
 import java.io.PrintWriter
 
 class MiniSymEx : CliktCommand() {
+    private val useWPEngine by option("-wp", help = "weakest precondition engine").flag()
+
     private val inputFile by argument("FILE", help = "While-program").file()
     private val printNames by option("-n", help = "print the position infos", metavar = "PROCEDURE")
         .flag("-N", default = false)
@@ -39,11 +41,20 @@ class MiniSymEx : CliktCommand() {
             unrollLoops(unrollings0, program)
         }
 
-        val symEx = SymEx2()
-        symEx.proveBody(entryProgram)
-        val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
-        writer.use {
-            symEx.encodeInto(it)
+        if (useWPEngine) {
+            val symEx = WP()
+            val result = symEx.executeStatements(entryProgram.body.statements)
+            val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
+            writer.use {
+                it.println(result)
+            }
+        } else {
+            val symEx = SymEx2()
+            symEx.proveBody(entryProgram)
+            val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
+            writer.use {
+                symEx.encodeInto(it)
+            }
         }
     }
 
