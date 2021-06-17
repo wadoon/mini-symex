@@ -1,6 +1,6 @@
-function BinarySearch(X: int; A: int[]): int;
+function BinarySearch(X: int, A: int[]): int;
 var
-  L, R, I, Cur: int;
+  L, R, I, Cur : int;
   run : bool;
 begin
   run := true;

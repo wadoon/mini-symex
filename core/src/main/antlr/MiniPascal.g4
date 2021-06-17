@@ -36,7 +36,7 @@ program: (procedure|function)+;
 
 procedure
    : PROCEDURE name=id '(' a=binders?  ')' ';'?
-      var
+      var?
       spec
       body
    ;
@@ -44,7 +44,7 @@ procedure
 
 function
    : FUNCTION name=id '(' a=binders?  ')' ':' type ';'?
-      var
+      var?
       spec
       body
    ;
@@ -63,30 +63,11 @@ spec:
 binders: id ':' type  (','  id ':' type)*;
 ids: id (',' id)*;
 
-ifStatement
-   : 'if' expr 'then' statement
-   | 'if' expr 'then' statement 'else' statement
-   ;
-
-whileStatement
-   : 'while' cond=expr
-      loopSpec
-      'do'
-      statement
-   ;
-
 loopSpec
     :  (INVARIANT        invariant=namedexprs)?
        ((MODIFIES|VARIANT) variant=ids)?
     ;
 
-body
-    : BEGIN statement (';' statement)* ';'? END
-    ;
-
-assignment
-   : id ('[' aa=expr ']')? ASSIGN rhs=expr
-   ;
 
 primitiveTypes: 'int'|'bool';
 
@@ -98,20 +79,19 @@ type
 
 emptyStmt: ';';
 
-assert_: ASSERT ( '(' namedexprs ')' | namedexprs);
-assume:  ASSUME ( '(' namedexprs ')' | namedexprs);
-havoc:   HAVOC  ( '(' ids ')' | ids);
 
 
 statement
-   : ifStatement
-   | whileStatement
-   | body
-   | assignment
-   | assert_
-   | assume
-   | havoc
+   : IF expr 'then' statement ('else' statement)? #ifStatement
+   | WHILE cond=expr loopSpec 'do' statement      #whileStatement
+   | body #body2
+   | ASSERT ( '(' namedexprs ')' | namedexprs) #assert_
+   | ASSUME ( '(' namedexprs ')' | namedexprs) #assume
+   | HAVOC  ( '(' ids ')' | ids) #havoc
+   | id ('[' aa=expr ']')? ASSIGN rhs=expr #assignment
    ;
+
+body: BEGIN statement (';' statement)* ';'? END;
 
 expr
   : expr op=(PLUS|MINUS) expr
@@ -126,15 +106,15 @@ expr
   ;
 
 primary
-   : id       #ignore1
+   : id '(' exprList ')' #fcall
+   | id '[' exprList ']' #arrayaccess
+   | id                  #ignore1
    | INT_LITERAL      #integer
    | BOOL_LITERAL     #bool
    | op=('!'|'-') expr #unary
    | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
    | '\\let'  type id '=' expr #letExpr
    | '(' expr ')' #parenExpr
-   | id '(' exprList ')' #fcall
-   | id '[' exprList ']' #arrayaccess
    ;
 
 exprList: expr (',' expr)*;
@@ -170,7 +150,7 @@ RBRACKET:']';
 PLUS:'+';
 XOR:'^';
 MUL:'*';
-DIV:'/';
+DIV:'/'|'div';
 INVARIANT:'invariant';
 MODIFIES:'modifies';
 VARIANT:'variant';

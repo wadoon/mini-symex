@@ -2,9 +2,7 @@ package edu.kit.iti.formal
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.default
-import com.github.ajalt.clikt.parameters.options.flag
-import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.options.*
 import com.github.ajalt.clikt.parameters.types.file
 import org.antlr.v4.runtime.CharStreams
 import java.io.PrintWriter
@@ -15,6 +13,14 @@ class MiniSymEx : CliktCommand() {
         .flag("-N", default = true)
     private val entryPoint by option("--main", help = "print the position infos").default("main")
 
+    private val unrollings by option("-r", "--unroll")
+        .associate(":")
+
+    private val unrollings0 by lazy {
+        unrollings.map { (k, v) -> k to v.toInt() }.toMap()
+    }
+
+
     private val output by option("-o", "--output", help = "a file destination to write SMT to", metavar = "SMT").file(
         mustBeWritable = true
     )
@@ -22,13 +28,15 @@ class MiniSymEx : CliktCommand() {
     override fun run() {
         PRINT_ATTRIBUTES = printNames
 
-        val program = ParsingFacade.parseProgram(
-            CharStreams.fromFileName(inputFile.absolutePath)
-        )
+        val program = parseProgram(inputFile.absolutePath)
 
         val entryProgram = program.procedures.find { it.name == entryPoint }
 
         require(entryProgram != null) { "Program $entryPoint not found" }
+
+        if (unrollings0.isNotEmpty()) {
+            unrollLoops(unrollings0, program)
+        }
 
         val symEx = SymEx2()
         symEx.proveBody(entryProgram)
@@ -36,6 +44,19 @@ class MiniSymEx : CliktCommand() {
         writer.use {
             symEx.encodeInto(it)
         }
+    }
+
+    private fun unrollLoops(unrollings0: Map<String, Int>, program: Program) {
+        program.accept(UnrollVisitor(unrollings0))
+        println(program.accept(Printer()))
+    }
+
+    private fun parseProgram(fileName: String): Program {
+        val s = CharStreams.fromFileName(fileName)
+        return if (fileName.endsWith(".pas"))
+            PasParsingFacade.parseProgram(s)
+        else
+            CParsingFacade.parseProgram(s)
     }
 }
 

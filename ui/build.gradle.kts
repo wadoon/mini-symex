@@ -21,7 +21,7 @@ repositories {
 
 
 application {
-    mainClass.set("MainKt")
+    mainClass.set("edu.kit.iti.formal.MainKt")
 }
 
 val compileKotlin: KotlinCompile by tasks

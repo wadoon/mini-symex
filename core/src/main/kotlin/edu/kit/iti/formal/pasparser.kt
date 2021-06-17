@@ -13,7 +13,7 @@ import org.antlr.v4.runtime.*
  * @author Alexander Weigl
  * @version 1 (2/25/21)
  */
-object ParsingFacade {
+object PasParsingFacade {
     @JvmStatic
     fun parseProgramOnly(stream: CharStream): Pair<List<Issue>, MiniPascalParser.ProgramContext> {
         val lexer = MiniPascalLexer(stream)
@@ -62,7 +62,9 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
     }
 
     override fun visitProgram(ctx: MiniPascalParser.ProgramContext): Node {
-        return Program(map(ctx.procedure()))
+        val p: MutableList<Procedure> = map(ctx.procedure())
+        val f: MutableList<Procedure> = map(ctx.function())
+        return Program((p + f).toMutableList())
             .withPosition(ctx)
     }
 
@@ -113,13 +115,19 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         val b = ctx.body().accept(this) as Body
         val signature = vars(ctx.`var`())
         val args = binders(ctx.a)
+        val modifies = variables(ctx.spec().modifies)
+        val returnType = type(ctx.type())!!
+
+        if (!signature.any { (_, b) -> b.id == "result" }) {
+            signature.add(returnType to Variable("result"))
+        }
 
         return Procedure(
             ctx.name.text, signature, args, b,
             requires = ctx.spec().pre?.accept(this) as? Clauses ?: Clauses(),
             ensures = ctx.spec().post?.accept(this) as? Clauses ?: Clauses(),
-            modifies = variables(ctx.spec().modifies),
-            returnType = ctx.type().accept(this) as TypeDecl
+            modifies = modifies,
+            returnType = returnType
         ).withPosition(ctx)
     }
 
@@ -178,7 +186,8 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
         ctx.cond.accept(this) as Expr,
         body(ctx.statement()),
         loopInv = ctx.loopSpec().invariant?.accept(this) as Clauses? ?: Clauses(),
-        erase = variables(ctx.loopSpec().variant)
+        erase = variables(ctx.loopSpec().variant),
+        label = null
     ).withPosition(ctx)
 
     override fun visitBody(ctx: MiniPascalParser.BodyContext) = Body(map(ctx.statement())).withPosition(ctx)
@@ -197,10 +206,13 @@ private class AstTranslator : MiniPascalBaseVisitor<Node>() {
     override fun visitBool(ctx: MiniPascalParser.BoolContext): Node =
         BoolLit(ctx.BOOL_LITERAL().text == "true").withPosition(ctx)
 
+    override fun visitParenExpr(ctx: MiniPascalParser.ParenExprContext): Node = ctx.expr().accept(this)
+
     override fun visitExpr(ctx: MiniPascalParser.ExprContext): Node {
         if (ctx.primary() != null) {
             try {
-                return ctx.primary().accept(this)
+                val v = ctx.primary().accept(this)
+                return v
             } catch (e: NullPointerException) {
                 println(ctx.text)
                 throw e

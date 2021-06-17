@@ -1,6 +1,7 @@
 package edu.kit.iti.formal
 
-import edu.kit.iti.formal.BinaryExpr.Operator.*
+import edu.kit.iti.formal.BinaryExpr.Operator.EQUAL
+import edu.kit.iti.formal.BinaryExpr.Operator.NOT_EQUAL
 import edu.kit.iti.formal.UnaryExpr.Operator.NEGATE
 import java.io.PrintWriter
 
@@ -39,7 +40,21 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         }
 
         fun introduce(signature: MutableList<Pair<TypeDecl, Variable>>) {
-            signature.forEach { (t, v) -> this.signature[v] = t }
+            signature.forEach { (t, v) -> introduce(v, t) }
+        }
+
+        fun introduce(v: Variable, t: TypeDecl) {
+            this.signature[v] = t
+            if (t.array) {
+                val (l, t) = getLengthOf(v);
+                introduce(l, t)
+            }
+        }
+
+        fun getLengthOf(v: Variable): Pair<Variable, TypeDecl> {
+            val len = Variable(v.id + "\$length")
+            val typ = TypeDecl("int", false)
+            return len to typ
         }
     }
 
@@ -89,23 +104,21 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         return scope
     }
 
-    private fun encodeExpression(expr: Expr, state: Scope): String = encodeExpression(expr, state::currentVar)
+    private fun encodeExpression(expr: Expr, state: Scope): String = encodeExpression(expr, state::currentVar, state)
 
-    private fun encodeExpression(expr: Expr, state: (Variable) -> String): String = when (expr) {
+    private fun encodeExpression(expr: Expr, vars: (Variable) -> String, state: Scope): String = when (expr) {
         is BinaryExpr ->
-            if (expr.op == NOT_EQUAL)
-                encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), state)
-            else
-                "(${expr.op.smtSymbol} ${encodeExpression(expr.left, state)} ${
-                    encodeExpression(
-                        expr.right,
-                        state
-                    )
+            if (expr.op == NOT_EQUAL) {
+                encodeExpression(UnaryExpr(NEGATE, expr.copy(op = EQUAL)), vars,state)
+            } else {
+                "(${expr.op.smtSymbol} ${encodeExpression(expr.left, vars, state)} ${
+                    encodeExpression(expr.right, vars, state)
                 })"
-        is FunctionCall -> error("Function calls only supported as standalone rhs.")
+            }
+        is FunctionCall -> encodeFunctionCallExpression(expr, state)
         is IntLit -> expr.value.toString()
-        is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, state)})"
-        is Variable -> state(expr)
+        is UnaryExpr -> "(${expr.op.smtSymbol} ${encodeExpression(expr.right, vars,state)})"
+        is Variable -> vars(expr)
         is BoolLit -> expr.value.toString()
         is QuantifiedExpr -> {
             val q = expr.quantifier.smtSymbol
@@ -114,13 +127,13 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
             }
             val s = { a: Variable ->
                 if (expr.binders.any { (_, v) -> a == v }) a.id
-                else state(a)
+                else vars(a)
             }
-            "($q ($b) ${encodeExpression(expr.sub, s)})"
+            "($q ($b) ${encodeExpression(expr.sub, s, state)})"
         }
         is ArrayAccess -> {
-            expr.args.foldRight(encodeExpression(expr.id, state)) { e, acc ->
-                "(select $acc ${encodeExpression(e, state)})"
+            expr.args.foldRight(encodeExpression(expr.id, vars, state)) { e, acc ->
+                "(select $acc ${encodeExpression(e, vars, state)})"
             }
         }
     }
@@ -128,6 +141,9 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
 
     fun executeStatement(s: Statement, state: Scope = Scope()): Scope {
         return when (s) {
+            is ChooseStmt -> {
+                TODO()
+            }
             is AssertStmt -> {
                 val e = encodeExpression(s.cond, state)
                     .named(s.named)
@@ -191,9 +207,10 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 }
 
                 // assume that the guard does not hold in the then-branch
+                val elseBody = s.otherwise ?: Body()
                 val finalElseGoal = sideGoal {
                     assume(notCond)
-                    executeStatement(s.otherwise, elseGoal)
+                    executeStatement(elseBody, elseGoal)
                 }
 
                 val allVars = finalThenGoal.signature.keys + finalElseGoal.signature.keys
@@ -221,7 +238,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                     s.erase.forEach { preservation.freshConst(it) }
                     assume(encodeExpression(s.loopInv, preservation))
                     assume(encodeExpression(s.cond, preservation))
-                    val afterBody = executeStatement(s.then, preservation)
+                    val afterBody = executeStatement(s.body, preservation)
                     discharge(
                         encodeExpression(s.loopInv, afterBody),
                         "Ensure Preservation of Loop Invariant"
@@ -237,6 +254,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 assume("(not $cond)")
                 termination
             }
+            is ChooseStmt -> TODO()
         }
     }
 
@@ -247,7 +265,6 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         return if (namedExpr.isEmpty()) "true"
         else "(and ${namedExpr.joinToString(" ")})"
     }
-
 
     private fun encodeFunctionCallExpression(expr: FunctionCall, state: Scope): String {
         val function = procedures.find { it.name == expr.id.id }
@@ -276,7 +293,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         }
 
         if (function.returnType.toType() != Type.VOID) {
-            val variable = Variable("__retValue__")
+            val variable = Variable("__retValue__${function.name}_${cnt++}")
             state.signature[variable] = function.returnType
             val retValue = state.freshConst(variable)
             assume(
@@ -288,6 +305,8 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         return ""
     }
 
+    var cnt = 0
+
     fun proveBody(function: Procedure) {
         val proofObligation = Body(arrayListOf())
         val scope = Scope()
@@ -297,7 +316,6 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         proofObligation.statements.add(AssertStmt(function.ensures, "post-condition of ${function.name}"))
         executeStatement(function.body, scope)
     }
-
 
     fun encodeInto(out: PrintWriter) {
         commands.forEach { out.println(it) }

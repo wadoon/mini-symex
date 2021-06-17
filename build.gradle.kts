@@ -3,6 +3,7 @@ plugins {
     id("org.sonarqube") version "3.1.1"
 }
 
+
 sonarqube {
     properties {
         property("sonar.projectKey", "wadoon_mini-symex")
@@ -22,6 +23,7 @@ subprojects {
             jvmTarget = "11"
         }
     }*/
+
 
     repositories {
         mavenCentral()

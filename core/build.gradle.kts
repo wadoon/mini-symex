@@ -11,7 +11,7 @@ group = "edu.kit.formal.kastel"
 version = "1.0-SNAPSHOT"
 
 application {
-    mainClass.set("MainKt")
+    mainClass.set("edu.kit.iti.formal.MainKt")
 }
 
 
@@ -26,14 +26,24 @@ repositories {
 dependencies {
     implementation("com.github.ajalt.clikt:clikt:3.1.0")
     implementation(kotlin("stdlib"))
-    testCompile("junit", "junit", "4.12")
     implementation("org.antlr:antlr4:4.8") // use ANTLR version 4
     antlr("org.antlr:antlr4:4.8") // use ANTLR version 4
+
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.7.1")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.7.1")
 }
 
 tasks.generateGrammarSource {
+    inputs.file("$projectDir/src/main/antlr/TinyC.g4")
+    inputs.file("$projectDir/src/main/antlr/MiniPascal.g4")
+    inputs.file("$projectDir/src/main/antlr/SMTLIBv2.g4")
+
     maxHeapSize = "64m"
     arguments = arguments + listOf("-visitor", "-long-messages")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 

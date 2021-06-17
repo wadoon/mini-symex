@@ -18,14 +18,43 @@ data class Declaration(val position: Position) : Metadata
 sealed class Node {
     var position: Position? = null
     var named: String? = null
+
+    abstract fun <T> accept(v: Visitor<T>): T
+}
+
+interface Visitor<T> {
+    fun visit(n: Program): T
+    fun visit(n: BinaryExpr): T
+    fun visit(n: UnaryExpr): T
+    fun visit(n: Variable): T
+    fun visit(n: WhileStmt): T
+    fun visit(n: IfStmt): T
+    fun visit(n: AssertStmt): T
+    fun visit(n: AssumeStmt): T
+    fun visit(n: HavocStmt): T
+    fun visit(n: AssignStmt): T
+    fun visit(n: TypeDecl): T
+    fun visit(n: Procedure): T
+    fun visit(n: IntLit): T
+    fun visit(n: QuantifiedExpr): T
+    fun visit(n: BoolLit): T
+    fun visit(n: ArrayAccess): T
+    fun visit(n: Clauses): T
+    fun visit(n: Body): T
+    fun visit(n: EmptyStmt): T
+    fun visit(n: FunctionCall): T
+    fun visit(n: ChooseStmt): T
 }
 
 data class Program(val procedures: MutableList<Procedure>) : Node() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
 data class Procedure(
     var name: String,
+    /** Local variables declaration */
     val signature: MutableList<Pair<TypeDecl, Variable>>,
+    /** Arguments of this procedure */
     val args: MutableList<Pair<TypeDecl, Variable>>,
     val body: Body,
     var requires: Clauses = Clauses(),
@@ -33,10 +62,11 @@ data class Procedure(
     var modifies: MutableList<Variable> = arrayListOf(),
     var returnType: TypeDecl = TypeDecl("void")
 ) : Node() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
 interface SpecOnly
-class DataTypeError(message: String?) : Exception(message) {}
+class DataTypeError(message: String?) : Exception(message)
 
 /**
  * The semantic representation of a type. A type is [name] with a [dimension]. If [dimension] is greater than 0,
@@ -62,6 +92,8 @@ data class QuantifiedExpr(
     enum class Quantifier(val smtSymbol: String) {
         FORALL("forall"), EXISTS("exists")
     }
+
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
 data class BinaryExpr(var left: Expr, var op: Operator, var right: Expr) : Expr() {
@@ -86,6 +118,8 @@ data class BinaryExpr(var left: Expr, var op: Operator, var right: Expr) : Expr(
         AND("and", Type.BOOL),
         OR("or", Type.BOOL)
     }
+
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
 data class UnaryExpr(var op: Operator, var right: Expr) : Expr() {
@@ -93,24 +127,44 @@ data class UnaryExpr(var op: Operator, var right: Expr) : Expr() {
         SUB("-", Type.INT),
         NEGATE("not", Type.BOOL),
     }
+
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
-data class IntLit(var value: BigInteger) : Expr()
+data class IntLit(var value: BigInteger) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class BoolLit(var value: Boolean) : Expr()
+data class BoolLit(var value: Boolean) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class Variable(var id: String) : Expr()
+data class Variable(var id: String) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class FunctionCall(var id: Variable, val args: MutableList<Expr>) : Expr()
+data class FunctionCall(var id: Variable, val args: MutableList<Expr>) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class ArrayAccess(var id: Variable, val args: MutableList<Expr>) : Expr()
+data class ArrayAccess(var id: Variable, val args: MutableList<Expr>) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 data class Clauses(private val intern: MutableList<Pair<Variable?, Expr>> = arrayListOf()) :
     MutableList<Pair<Variable?, Expr>> by intern,
-    Node()
+    Node() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 sealed class Statement : Node()
-data class HavocStmt(var ids: MutableList<Variable>) : Statement()
+data class HavocStmt(var ids: MutableList<Variable>) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
+
+data class ChooseStmt(var variable: Variable, var expr: Expr) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 data class AssumeStmt(var cond: Clauses) : Statement() {
     var description: String? = null
@@ -118,6 +172,8 @@ data class AssumeStmt(var cond: Clauses) : Statement() {
     constructor(cond: Clauses, desc: String) : this(cond) {
         description = desc
     }
+
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
 data class AssertStmt(var cond: Clauses) : Statement() {
@@ -127,29 +183,42 @@ data class AssertStmt(var cond: Clauses) : Statement() {
         description = desc
     }
 
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
-data class Body(val statements: MutableList<Statement>) : Statement()
+data class Body(val statements: MutableList<Statement> = arrayListOf()) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body) : Statement()
+data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body? = null) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 data class WhileStmt(
-    var cond: Expr, var then: Body,
+    var cond: Expr, var body: Body,
     var loopInv: Clauses = Clauses(),
-    var erase: MutableList<Variable> = arrayListOf()
-) : Statement()
+    var erase: MutableList<Variable> = arrayListOf(),
+    var label: String? = null
+) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-class EmptyStmt : Statement()
+class EmptyStmt : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 data class AssignStmt(
     var id: Variable,
     var rhs: Expr?,
     var decl: TypeDecl? = null,
     var arrayAccess: Expr? = null
-) : Statement()
+) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
-data class TypeDecl(val name: String, val array: Boolean = false) : Node()
-
+data class TypeDecl(val name: String, val array: Boolean = false) : Node() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 fun Expr.typeOf(binders: Map<Variable, Type>): Type = when (this) {
     is BinaryExpr -> {
@@ -202,12 +271,13 @@ fun TypeDecl.toType(): Type =
 fun Expr.toHuman(): String = when (this) {
     is BinaryExpr -> "(${left.toHuman()} $op ${right.toHuman()})"
     is BoolLit -> value.toString()
-    is FunctionCall -> TODO()
+    is FunctionCall -> "${this.id.toHuman()}(${this.args.joinToString(", ") { it.toHuman() }})"
     is IntLit -> value.toString()
     is QuantifiedExpr -> "(\\${quantifier.smtSymbol}  ${binders.joinToString(", ") { (a, b) -> "${a.name} ${b.id}" }} ${sub.toHuman()})"
     is UnaryExpr -> "($op ${right.toHuman()})"
     is Variable -> id
-    is ArrayAccess -> TODO()
+    is ArrayAccess -> "${this.id.toHuman()}[${args.joinToString(", ") { it.toHuman() }}]"
+    //is ChooseStmt -> "choose ${variable.toHuman()} : ${expr.toHuman()}"
 }
 
 internal fun Clauses.toHuman(): String =
