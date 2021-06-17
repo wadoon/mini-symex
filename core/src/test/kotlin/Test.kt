@@ -23,7 +23,7 @@ object Test {
         }
 
     private fun parseAndLoad(s: File) {
-        val program = ParsingFacade.parseProgram(CharStreams.fromFileName(s.absolutePath))
+        val program = ParsingFacade.parseProgram(s.absolutePath)
         val symEx = SymEx2()
         val b = program.procedures.first()
         symEx.proveBody(b)
@@ -45,7 +45,7 @@ void main() {
 }
         """.trimIndent();
 
-        val program = ParsingFacade.parseProgram(CharStreams.fromString(p))
+        val program = ParsingFacade.parseProgramC(CharStreams.fromString(p))
         val symEx = SymEx2()
         symEx.executeStatement(program.procedures.first().body)
     }

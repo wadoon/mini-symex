@@ -2,9 +2,11 @@ package edu.kit.iti.formal
 
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.parameters.arguments.argument
-import com.github.ajalt.clikt.parameters.options.*
+import com.github.ajalt.clikt.parameters.options.associate
+import com.github.ajalt.clikt.parameters.options.default
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.file
-import org.antlr.v4.runtime.CharStreams
 import java.io.PrintWriter
 
 class MiniSymEx : CliktCommand() {
@@ -28,7 +30,7 @@ class MiniSymEx : CliktCommand() {
     override fun run() {
         PRINT_ATTRIBUTES = printNames
 
-        val program = parseProgram(inputFile.absolutePath)
+        val program = ParsingFacade.parseProgram(inputFile.absolutePath)
 
         val entryProgram = program.procedures.find { it.name == entryPoint }
 
@@ -50,14 +52,8 @@ class MiniSymEx : CliktCommand() {
         program.accept(UnrollVisitor(unrollings0))
         println(program.accept(Printer()))
     }
-
-    private fun parseProgram(fileName: String): Program {
-        val s = CharStreams.fromFileName(fileName)
-        return if (fileName.endsWith(".pas"))
-            PasParsingFacade.parseProgram(s)
-        else
-            CParsingFacade.parseProgram(s)
-    }
 }
 
 fun main(args: Array<String>) = MiniSymEx().main(args)
+
+
