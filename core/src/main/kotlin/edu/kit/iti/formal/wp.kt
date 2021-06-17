@@ -105,8 +105,9 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
             }
             is ChooseStmt -> {
                 val vars = s.variables.joinToString(" ") { v -> "(${v.id} ${state.type(v)})" }
+                val pred = encodeExpression(s.expr, state)
                 val body = executeStatements(tail, state)
-                "(exists ($vars) $body)"
+                "(exists ($vars) (and $pred $body))"
             }
             is AssertStmt -> {
                 val e = encodeExpression(s.cond, state)
