@@ -333,4 +333,9 @@ fun String.position(p: Position?): String =
 
 
 fun TypeDecl.toSmtType(): String = toType().toSmtType()
-fun Type.toSmtType(): String = name.capitalize()
+fun Type.toSmtType(): String = when (this) {
+    Type.VOID, Type.ANY -> error("No SMT type for Void or ANY")
+    Type.BOOL_ARRAY -> "(Array Int Bool)"
+    Type.INT_ARRAY -> "(Array Int Int)"
+    Type.INT, Type.BOOL -> name.capitalize()
+}

@@ -10,7 +10,7 @@ import edu.kit.iti.formal.UnaryExpr.Operator.NEGATE
  * @version 1 (2/25/21)
  */
 class WP(private val procedures: List<Procedure> = arrayListOf()) {
-    inner class Scope(
+    class Scope(
         val signature: HashMap<Variable, TypeDecl> = HashMap(),
     ) {
         fun sub() = Scope(
@@ -76,7 +76,7 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
         is QuantifiedExpr -> {
             val q = expr.quantifier.smtSymbol
             val b = expr.binders.joinToString(" ") { (t, v) ->
-                "(${t.toSmtType()} ${v.id})"
+                "(${v.id} ${t.toSmtType()})"
             }
             val s = { a: Variable ->
                 if (expr.binders.any { (_, v) -> a == v }) a.id
@@ -92,19 +92,19 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
     }
 
     fun executeStatements(statements: List<Statement>, state: Scope = Scope()): String {
-        return if (statements.isEmpty()) "false"
+        return if (statements.isEmpty()) "true"
         else executeStatement(statements.first(), statements.drop(1), state)
     }
 
     fun executeStatement(s: Statement, tail: List<Statement>, state: Scope = Scope()): String {
         return when (s) {
             is HavocStmt -> {
-                val vars = s.ids.joinToString(" ") { v -> "(${v.id} ${state.type(v)})" }
+                val vars = s.ids.toSmtBinder(state)
                 val body = executeStatements(tail, state)
                 "(forall ($vars) $body)"
             }
             is ChooseStmt -> {
-                val vars = s.variables.joinToString(" ") { v -> "(${v.id} ${state.type(v)})" }
+                val vars = s.variables.toSmtBinder(state)
                 val pred = encodeExpression(s.expr, state)
                 val body = executeStatements(tail, state)
                 "(exists ($vars) (and $pred $body))"
@@ -115,7 +115,8 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
                     .position(s.position)
                 val body = executeStatements(tail, state)
                 //val desc = s.description ?: "assert '${s.cond.toHuman()}' @ ${s.position}"
-                "(or (not $e) (=> $e $body))"
+                //"(and $e (=> $e $body))"
+                "(and $e $body)"
             }
             is AssumeStmt -> {
                 //val desc = s.description ?: "assume '${s.cond.toHuman()}' @ ${s.position}"
@@ -125,9 +126,7 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
             }
             is AssignStmt -> handleAssignment(s, tail, state)
             is Body -> executeStatements(tail, state)
-            is EmptyStmt -> {
-                executeStatements(tail, state)
-            }
+            is EmptyStmt -> executeStatements(tail, state)
             is IfStmt -> {
                 //evaluate condition in the current goal
                 val cond = encodeExpression(s.cond, state)
@@ -172,6 +171,9 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
         }
     }
 
+    private fun Iterable<Variable>.toSmtBinder(state: Scope): String =
+        joinToString(" ") { v -> "(${v.id} ${state.type(v)})" }
+
     private fun encodeExpression(clauses: Clauses, state: Scope): String =
         encodeExpression(clauses, state::currentVar, state)
 
@@ -187,7 +189,6 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
 
         val rhs = s.rhs
         val body = executeStatements(tail, state)
-        var boundedValue = ""
         val boundedVariable = s.id.toHuman()
 
         if (rhs is FunctionCall) {

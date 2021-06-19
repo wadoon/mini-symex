@@ -42,11 +42,17 @@ class MiniSymEx : CliktCommand() {
         }
 
         if (useWPEngine) {
-            val symEx = WP()
-            val result = symEx.executeStatements(entryProgram.body.statements)
+            val symEx = WP(program.procedures)
+            val state = WP.Scope()
+            val result = symEx.executeStatements(entryProgram.body.statements, state)
             val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
             writer.use {
-                it.println(result)
+                state.signature.forEach{(v,t)->
+                    it.println("(declare-const ${v.toHuman()} ${t.toSmtType()})")
+                }
+                it.println("(assert (not $result))")
+                it.println("(check-sat)")
+                it.println("(get-model)")
             }
         } else {
             val symEx = SymEx2()
