@@ -21,33 +21,33 @@
 
 
 \begin{align*}
-  wp( v = e \semi P)
-  & = wp(P)[v/e]
+  vc( v = e \semi P)
+  & = vc(P)[v/e]
   \\
-  wp( \mathtt{if}~c~\mathtt{then}~b_1~\mathtt{else}~b_2~\semi P)
-  & = (c \rightarrow wp(b_1\semiP))
-    \land (\neg c \rightarrow wp(b_2\semiP))
+  vc( \mathtt{if}~c~\mathtt{then}~b_1~\mathtt{else}~b_2~\semi P)
+  & = (c \rightarrow vc(b_1\semi P))
+    \land (\neg c \rightarrow vc(b_2\semi P))
   \\
-  wp( \mathtt{choose}~v~\mathtt{:}~e\semi P)
-  & = \exists v.~ e \land wp(P)
+  vc( \mathtt{choose}~v~\mathtt{:}~e\semi P)
+  & = \exists v.~ e \land vc(P)
   \\
-  wp( \mathtt{havoc}~v\semi P)
-  & = \forall v.~ wp(P)
+  vc( \mathtt{havoc}~v\semi P)
+  & = \forall v.~ vc(P)
   \\
-  wp( \mathtt{assume}~e\semi P)
-  & = e \rightarrow wp(P)
+  vc( \mathtt{assume}~e\semi P)
+  & = e \rightarrow vc(P)
   \\
-  wp( \mathtt{assert}~e\semi P)
-  & = e \land wp(P)
+  vc( \mathtt{assert}~e\semi P)
+  & = e \land vc(P)
   \\
-  wp( \mathtt{assert}~e\semi P)
-  & = e \land (e \rightarrow wp(P))
+  vc( \mathtt{assert}~e\semi P)
+  & = e \land (e \rightarrow vc(P))
   \\
-  wp(\epsilon) & = true
+  vc(\epsilon) & = true
 \end{align*}
 
 \begin{definition}
-  A program $P$ is valid w.r.t. to its specification iff $wp(P)$ is
+  A program $P$ is valid w.r.t. to its specification iff $vc(P)$ is
   valid.
 \end{definition}
 
@@ -60,15 +60,15 @@ assert x == 2;
 \end{verbatim}
 
 \begin{align*}
-  wp(P_0) & = wp(x = 0 \semi(\mathtt{choose}~x~\mathtt:~x >
+  vc(P_0) & = vc(x = 0 \semi(\mathtt{choose}~x~\mathtt:~x >
             0\semi(\mathtt{assert}~x==2\semi\epsilon)))
   \\
-  &= wp((\mathtt{choose}~x~\mathtt:~x >
+  &= vc((\mathtt{choose}~x~\mathtt:~x >
     0\semi(\mathtt{assert}~x==2\semi\epsilon)))[x/0]
   \\
-  &= (\exists x.~ x>0 \land wp(\mathtt{assert}~x==2\semi\epsilon))[x/0]
+  &= (\exists x.~ x>0 \land vc(\mathtt{assert}~x==2\semi\epsilon))[x/0]
   \\
-  &= (\exists x.~ x>0 \land x=2 \wedge wp(\epsilon) )[x/0]
+  &= (\exists x.~ x>0 \land x=2 \wedge vc(\epsilon) )[x/0]
   \\
   &= (\exists x.~ x>0 \land x=2 \wedge true)[x/0]
   \\
