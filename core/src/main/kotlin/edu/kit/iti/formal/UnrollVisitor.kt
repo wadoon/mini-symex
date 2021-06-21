@@ -98,23 +98,36 @@ open class MutableVisitor() : Visitor<Unit> {
 
 class UnrollVisitor(val unroll: Map<String, Int>) : MutableVisitor() {
     override fun visit(n: Body) {
-        val newStatments = arrayListOf<Statement>()
+        val newStatements = arrayListOf<Statement>()
         n.statements.forEach {
             it.accept(this) // expand children
 
             if (it is WhileStmt && it.label in unroll) {
-                newStatments.addAll(
+                newStatements.addAll(
                     unroll(it, unroll[it.label]!!)
                 )
             } else {
-                newStatments.add(it)
+                newStatements.add(it)
             }
         }
         n.statements.clear()
-        n.statements.addAll(newStatments)
+        n.statements.addAll(newStatements)
     }
 
-    private fun unroll(loop: WhileStmt, k: Int): List<Statement> {
+    private fun unroll(whileStmt: WhileStmt, k: Int): Collection<Statement> {
+        require(k > 0)
+        fun recur(a: Int): Statement =
+            if (a == 0) EmptyStmt()
+            else IfStmt(whileStmt.cond,
+                Body().also {
+                    it.statements.addAll(whileStmt.body.statements);
+                    it.statements.add(recur(a - 1))
+                })
+        return arrayListOf(recur(k))
+    }
+
+    private fun unrollLinear(loop: WhileStmt, k: Int): List<Statement> {
+        //TODO
         val statements = arrayListOf<Statement>()
         require(k > 0)
         for (i in 1 until k) {

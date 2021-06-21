@@ -13,27 +13,24 @@ class Printer() : Visitor<String> {
     override fun visit(n: HavocStmt): String = "havoc ${n.ids.joinToString(", ") { it.accept(this) }}"
 
     override fun visit(n: WhileStmt): String =
-        "while (${n.cond.accept(this)}) {\n    ${n.body.accept(this).replace("\n","\n    ")}\n}"
+        "while (${n.cond.accept(this)})\n${n.body.accept(this).replace("\n","\n    ")}"
 
     override fun visit(n: IfStmt): String =
-        "if(${n.cond.accept(this)})\n    ${n.then.accept(this)} " +
-                "\nelse\n    ${n.otherwise.accept(this)}"
+        "if(${n.cond.accept(this)})\n${n.then.accept(this)}" +
+                "\nelse\n${n.otherwise.accept(this)}"
 
     override fun visit(n: AssignStmt): String =
         (n.decl?.accept(this)?.let { "$it " } ?: "") + n.id.accept(this) +
                 (n.arrayAccess?.let{ "[" + it.accept(this) + "]"}?: "") +
                 (n.rhs?.let { " = " + it.accept(this) } ?: "") + ";"
 
-    override fun visit(n: Procedure): String =
-        """${n.returnType.accept(this)} ${n.name} (${
-            n.args.joinToString(", ") { (a, b) ->
-                a.accept(this) + " " + b.accept(
-                    this
-                )
-            }
-        })
-                ${n.body.accept(this)}            
-        """.trimIndent()
+    override fun visit(n: Procedure): String {
+        val ret = n.returnType.accept(this)
+        val args = n.args.joinToString(", ") { (a, b) ->
+            "${a.accept(this)} ${b.accept(this)}" }
+        val body = n.body.accept(this)
+        return "$ret ${n.name}($args)\n$body"
+    }
 
     override fun visit(n: QuantifiedExpr) = "(\\${n.quantifier.smtSymbol}  " +
             "${n.binders.joinToString(", ") { (a, b) -> "${a.name} ${b.id}" }} ${n.sub.accept(this)})"
