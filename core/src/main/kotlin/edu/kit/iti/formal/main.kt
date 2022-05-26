@@ -37,6 +37,7 @@ class MiniSymEx : CliktCommand() {
 
         require(entryProgram != null) { "Program $entryPoint not found" }
 
+
         if (unrollings0.isNotEmpty()) {
             unrollLoops(unrollings0, program)
         }
@@ -55,8 +56,13 @@ class MiniSymEx : CliktCommand() {
                 it.println("(get-model)")
             }
         } else {
-            val symEx = SymEx2()
-            symEx.proveBody(entryProgram)
+            val symEx = SymEx2(program.procedures)
+            val state = symEx.Scope()
+            program.globalVariables.forEach {
+                symEx.executeStatement(it, state)
+            }
+            state.makeAllKnownVariablesGlobal()
+            symEx.proveBody(entryProgram, state)
             val writer = output?.let { PrintWriter(it) } ?: PrintWriter(System.out)
             writer.use {
                 symEx.encodeInto(it)

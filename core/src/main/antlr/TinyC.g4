@@ -32,14 +32,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 grammar TinyC;
 
-program: procedure+;
+program: (procedure|assignment)+ EOF;
 
 procedure
-   : (type|'void') name=id '(' a=binders?  ')'
+   : (type|VOID) name=id '(' a=binders?  ')'
        ('[' 'pre'        pre=expr ']')?
        ('[' 'post'       post=expr ']')?
        ('[' 'modifies'   modifies=ids ']')?
-      body
+      (body|';')
    ;
 
 binders: type id (',' type id)*;
@@ -68,7 +68,7 @@ assignment
    ;
 
 type
-   : t=('int'|'bool') (a='[]')?
+   : t=('double'|'float'|'int'|'bool') (a='[]')?
    ;
 
 emptyStmt: ';';
@@ -78,9 +78,7 @@ assume: 'assume' expr ';';
 havoc: 'havoc' ids ';';
 choose: 'choose' ids ':' expr ';';
 
-
-returnStatement: 'return' expr;
-
+returnStatement: 'return' expr ';';
 
 statement
    : ifStatement
@@ -93,11 +91,17 @@ statement
    | havoc
    | choose
    | emptyStmt
+   | procedureCall
    ;
 
+
+typecast: '(' type ')' expr;
+array_init: '{' (expr (',' expr)*)? '}';
+
 expr
-  : expr op=('+'|'-') expr
-  | expr op=('*'|'/'|'%') expr
+  :
+    expr op=('*'|'/'|'%') expr
+  | expr op=('+'|'-') expr
   | expr op=('<'|'<='|'>'|'>=') expr
   | expr op=('=='|'!=') expr
   | expr op='&&' expr
@@ -108,16 +112,22 @@ expr
   ;
 
 primary
-   : id       # ignore1
+   :
+     DOUBLE      #double
    | INT      #integer
    | BOOL      #bool
+   | typecast #ignore2
+   | array_init #ignore3
    | op=('!'|'-') expr #unary
    | '(' q=('\\forall'|'\\exists')  binders ';'  expr ')' #quantifiedExpr
    | '\\let'  type id '=' expr #letExpr
    | '(' expr ')' #parenExpr
-   | id '(' exprList ')' #fcall
+   | id '(' exprList? ')' #fcall
    | id '[' exprList ']' #arrayaccess
+   | id # ignore1
    ;
+
+procedureCall: id '(' exprList? ')';
 
 exprList: expr (',' expr)*;
 
@@ -125,12 +135,20 @@ id
    : IDENTIFIER
    ;
 
+SL_COMMENT: '//' .*? '\n' -> skip;
+ML_COMMENT: '/*' .*? '*/' -> skip;
+VOID: 'void';
+
 STRING
    : '"' ~["]* '"'
    ;
 
 INT
    : [0-9] +
+   ;
+
+DOUBLE
+   : INT* '.' INT
    ;
 
 BOOL
@@ -141,7 +159,6 @@ BOOL
 IDENTIFIER
    : [a-zA-Z_] [a-zA-Z_0-9]*
    ;
-
 WS
    : [ \r\n\t] -> skip
    ;

@@ -85,7 +85,7 @@ private class PasAstTranslator : MiniPascalBaseVisitor<Node>() {
     override fun visitProgram(ctx: MiniPascalParser.ProgramContext): Node {
         val p: MutableList<Procedure> = map(ctx.procedure())
         val f: MutableList<Procedure> = map(ctx.function())
-        return Program((p + f).toMutableList())
+        return Program(arrayListOf(), (p + f).toMutableList())
             .withPosition(ctx)
     }
 
@@ -307,7 +307,10 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     }
 
     override fun visitProgram(ctx: TinyCParser.ProgramContext): Node {
-        return Program(map(ctx.procedure()))
+        return Program(
+            map(ctx.assignment()),
+            map(ctx.procedure().filter { it.body() != null })
+        )
             .withPosition(ctx)
     }
 
@@ -315,6 +318,13 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     private fun <T> map(ctx: List<ParserRuleContext>) =
         ctx.map { it.accept(this) as T }.toMutableList()
 
+    override fun visitProcedureCall(ctx: TinyCParser.ProcedureCallContext) = ProcedureCall(
+        ctx.id().accept(this) as Variable,
+        exprList(ctx.exprList())
+    ).withPosition(ctx)
+
+    override fun visitTypecast(ctx: TinyCParser.TypecastContext): Node =
+        TypeCast(type(ctx.type()), ctx.expr().accept(this) as Expr)
 
     override fun visitQuantifiedExpr(ctx: TinyCParser.QuantifiedExprContext): Node =
         QuantifiedExpr(
@@ -335,10 +345,12 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     override fun visitProcedure(ctx: TinyCParser.ProcedureContext): Node {
         val b = ctx.body().accept(this) as Body
         val args = binders(ctx.a)
+        val rt = if (ctx.VOID() != null) TypeDecl("void") else type(ctx.type())
 
         return Procedure(
             name = ctx.name.text,
             signature = arrayListOf(),
+            returnType = rt,
             args = args,
             body = b,
             requires = ctx.pre?.accept(this) as? Clauses? ?: Clauses(),
@@ -381,7 +393,6 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
 
         val s = statement.accept(this) as Statement
         return if (s is Body) s else b.also { b.statements.add(s) }
-
     }
 
     override fun visitWhileStatement(ctx: TinyCParser.WhileStatementContext) = WhileStmt(
@@ -397,25 +408,28 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     override fun visitAssignment(ctx: TinyCParser.AssignmentContext) = AssignStmt(
         ctx.id().accept(this) as Variable,
         ctx.rhs?.accept(this) as Expr?,
-        type(ctx.type()),
+        typeN(ctx.type()),
         arrayAccess = ctx.aa?.accept(this) as Expr?
     ).withPosition(ctx)
 
-    private fun type(type: TinyCParser.TypeContext?): TypeDecl? {
-        if (type == null) return null
-        return TypeDecl(type.t.text, type.a != null).withPosition(type)
-    }
+    private fun type(type: TinyCParser.TypeContext): TypeDecl = TypeDecl(type.t.text, type.a != null).withPosition(type)
+    private fun typeN(t: TinyCParser.TypeContext?): TypeDecl? = t?.let { type(t) }
 
     override fun visitBool(ctx: TinyCParser.BoolContext): Node = BoolLit(ctx.BOOL().text == "true").withPosition(ctx)
 
+    override fun visitParenExpr(ctx: TinyCParser.ParenExprContext): Node = ctx.expr().accept(this)
+
+    override fun visitArray_init(ctx: TinyCParser.Array_initContext) = ArrayInit(map(ctx.expr()))
+
+    override fun visitReturnStatement(ctx: TinyCParser.ReturnStatementContext): Node =
+        ReturnStmt(ctx.expr().accept(this) as Expr)
+
+
     override fun visitExpr(ctx: TinyCParser.ExprContext): Node {
         if (ctx.primary() != null) {
-            try {
-                return ctx.primary().accept(this)
-            } catch (e: NullPointerException) {
-                println(ctx.text)
-                throw e
-            }
+            val x = ctx.primary().accept(this)
+            if (x == null) println(ctx.text)
+            return x;
         }
         return BinaryExpr(
             ctx.expr(0).accept(this) as Expr,
@@ -444,13 +458,15 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
         }
 
     override fun visitInteger(ctx: TinyCParser.IntegerContext) = IntLit(ctx.INT().text.toBigInteger()).withPosition(ctx)
+    override fun visitDouble(ctx: TinyCParser.DoubleContext) = DoubleLit(ctx.DOUBLE().text).withPosition(ctx)
 
     override fun visitFcall(ctx: TinyCParser.FcallContext) = FunctionCall(
         ctx.id().accept(this) as Variable,
         exprList(ctx.exprList())
     ).withPosition(ctx)
 
-    private fun exprList(ctx: TinyCParser.ExprListContext): MutableList<Expr> = map(ctx.expr())
+    private fun exprList(ctx: TinyCParser.ExprListContext?): MutableList<Expr> =
+        if (ctx == null) arrayListOf() else map(ctx.expr())
 
 
     override fun visitEmptyStmt(ctx: TinyCParser.EmptyStmtContext) = EmptyStmt().withPosition(ctx)
@@ -472,7 +488,8 @@ private class TinyCAstTranslator : TinyCBaseVisitor<Node>() {
     override fun visitChoose(ctx: TinyCParser.ChooseContext): Node =
         ChooseStmt(
             ctx.ids().id().map { it.accept(this) as Variable }.toMutableList(),
-            ctx.expr().accept(this) as Expr)
+            ctx.expr().accept(this) as Expr
+        )
             .withPosition(ctx)
 }
 

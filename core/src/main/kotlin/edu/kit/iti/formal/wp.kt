@@ -89,6 +89,14 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
                 "(select $acc ${encodeExpression(e, vars, state)})"
             }
         }
+        is DoubleLit -> expr.value
+        is TypeCast -> when (expr.type.toType()) {
+            Type.INT -> "(to_int ${encodeExpression(expr.sub, state)})"
+            Type.BOOL -> "(= 1 ${encodeExpression(expr.sub, state)})"
+            Type.DOUBLE -> "(to_real ${encodeExpression(expr.sub, state)})"
+            else -> TODO()
+        }
+        is ArrayInit -> TODO()
     }
 
     fun executeStatements(statements: List<Statement>, state: Scope = Scope()): String {
@@ -168,6 +176,16 @@ class WP(private val procedures: List<Procedure> = arrayListOf()) {
                 assume("(not $cond)")
                 termination*/
             }
+            is ProcedureCall -> {
+                // 1. Find procedure within the program
+                val procedure = procedures.find { it.name == s.id.id }
+                    ?: error("Could not find procedure with name ${s.id.id}")
+                // TODO 2. Map arguments
+                val bodyGoal = state.sub()
+                // 3. Proceed with the body of the procedure
+                executeStatements(procedure.body.statements, bodyGoal)
+            }
+            is ReturnStmt -> TODO()
         }
     }
 

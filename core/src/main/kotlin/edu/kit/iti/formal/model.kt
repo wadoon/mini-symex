@@ -44,9 +44,17 @@ interface Visitor<T> {
     fun visit(n: EmptyStmt): T
     fun visit(n: FunctionCall): T
     fun visit(n: ChooseStmt): T
+    fun visit(typeCast: TypeCast): T
+    fun visit(lit: DoubleLit): T
+    fun visit(pcall: ProcedureCall): T
+    fun visit(arrayInit: ArrayInit): T
+    fun visit(returnStmt: ReturnStmt): T
 }
 
-data class Program(val procedures: MutableList<Procedure>) : Node() {
+data class Program(
+    val globalVariables: MutableList<AssignStmt>,
+    val procedures: MutableList<Procedure>
+) : Node() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
@@ -76,6 +84,9 @@ sealed class Type(val name: String, val dimension: Int = 0) {
     object ANY : Type("any", 0) //special type only available in logic to mark polymorphic operators
     object VOID : Type("void", 0)
     object INT : Type("int", 0)
+    object DOUBLE : Type("double", 0)
+    object DOUBLE_ARRAY : Type("double", 1)
+
     object BOOL : Type("bool", 0)
     object INT_ARRAY : Type("int", 1)
     object BOOL_ARRAY : Type("bool", 1)
@@ -83,6 +94,14 @@ sealed class Type(val name: String, val dimension: Int = 0) {
 
 
 sealed class Expr : Node()
+
+data class ArrayInit(val values: MutableList<Expr>) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
+
+data class TypeCast(val type: TypeDecl, var sub: Expr) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
 
 data class QuantifiedExpr(
     val binders: MutableList<Pair<TypeDecl, Variable>>,
@@ -135,6 +154,11 @@ data class IntLit(var value: BigInteger) : Expr() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
+data class DoubleLit(var value: String) : Expr() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
+
+
 data class BoolLit(var value: Boolean) : Expr() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
@@ -159,6 +183,10 @@ data class Clauses(private val intern: MutableList<Pair<Variable?, Expr>> = arra
 
 sealed class Statement : Node()
 data class HavocStmt(var ids: MutableList<Variable>) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
+
+data class ReturnStmt(var expr: Expr) : Statement() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
@@ -191,6 +219,10 @@ data class Body(val statements: MutableList<Statement> = arrayListOf()) : Statem
 }
 
 data class IfStmt(var cond: Expr, var then: Body, var otherwise: Body = Body()) : Statement() {
+    override fun <T> accept(v: Visitor<T>): T = v.visit(this)
+}
+
+data class ProcedureCall(var id: Variable, var args: MutableList<Expr>) : Statement() {
     override fun <T> accept(v: Visitor<T>): T = v.visit(this)
 }
 
@@ -248,6 +280,9 @@ fun Expr.typeOf(binders: Map<Variable, Type>): Type = when (this) {
         require(it.dimension > 0) { "Not array" }
         it.toBaseType()
     } ?: throw DataTypeError("Variable ${this.id} has no known type.")
+    is TypeCast -> this.type.toType()
+    is DoubleLit -> Type.DOUBLE
+    is ArrayInit -> TODO()
 }
 
 fun Type.toBaseType() = when (this) {
@@ -262,8 +297,11 @@ fun TypeDecl.toType(): Type =
     when {
         array && name == "int" -> Type.INT_ARRAY
         !array && name == "int" -> Type.INT
+        array && name == "double" -> Type.DOUBLE_ARRAY
+        !array && name == "double" -> Type.DOUBLE
         array && name == "bool" -> Type.BOOL_ARRAY
         !array && name == "bool" -> Type.BOOL
+        name=="void" -> Type.VOID
         else -> throw IllegalStateException("Type ${name}${if (array) "[]" else ""} is unknown.")
     }
 
@@ -278,6 +316,9 @@ fun Expr.toHuman(): String = when (this) {
     is Variable -> id
     is ArrayAccess -> "${this.id.toHuman()}[${args.joinToString(", ") { it.toHuman() }}]"
     //is ChooseStmt -> "choose ${variable.toHuman()} : ${expr.toHuman()}"
+    is TypeCast -> "($type) ${sub.toHuman()}"
+    is DoubleLit -> this.value
+    is ArrayInit -> TODO()
 }
 
 internal fun Clauses.toHuman(): String =

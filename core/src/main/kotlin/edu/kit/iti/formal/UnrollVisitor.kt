@@ -93,6 +93,26 @@ open class MutableVisitor() : Visitor<Unit> {
         n.variables.forEach { it.accept(this) }
         n.expr.accept(this)
     }
+
+    override fun visit(typeCast: TypeCast) {
+        TODO("Not yet implemented")
+    }
+
+    override fun visit(lit: DoubleLit) {
+        TODO("Not yet implemented")
+    }
+
+    override fun visit(pcall: ProcedureCall) {
+        TODO("Not yet implemented")
+    }
+
+    override fun visit(arrayInit: ArrayInit) {
+        TODO("Not yet implemented")
+    }
+
+    override fun visit(returnStmt: ReturnStmt) {
+        TODO("Not yet implemented")
+    }
 }
 
 

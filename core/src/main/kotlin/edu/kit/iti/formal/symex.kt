@@ -12,39 +12,60 @@ import java.io.PrintWriter
  */
 var PRINT_ATTRIBUTES = true
 
+object VariableCounter {
+    private val counters = HashMap<String, Int>()
+    fun fresh(name: String): Int {
+        counters[name] = counters.getOrDefault(name, 0) + 1
+        return counters[name]!!
+    }
+}
+
 class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     inner class Scope(
-        val signature: HashMap<Variable, TypeDecl> = HashMap(),
-        private val variables: HashMap<Variable, MutableList<Int>> = HashMap()
+        val signature: MutableMap<Variable, TypeDecl> = HashMap(),
+        //private val variables: MutableMap<Variable, MutableList<Int>> = HashMap(),
+        private val variables: MutableMap<Variable, Int> = HashMap(),
+        private val global: MutableSet<Variable> = HashSet(),
+        private val parent: Scope? = null
     ) {
         fun sub() = Scope(
             signature = HashMap(signature),
-            variables = variables
+            variables = HashMap(variables),
+            global = global,
+            parent = parent
         )
+
+        fun makeAllKnownVariablesGlobal() = global.addAll(signature.keys)
 
         fun clone() = Scope(signature = HashMap(signature), variables = HashMap(variables))
 
         fun currentVar(id: Variable): String {
-            val cnt = variables.computeIfAbsent(id) { arrayListOf(0) }.last()
+            //val cnt = variables.computeIfAbsent(id) { arrayListOf(0) }.last()
+            val cnt = variables[id]
             return "${id.id}_${cnt}"
         }
 
         fun freshConst(id: Variable): String {
-            val cnt = variables.computeIfAbsent(id) { arrayListOf(0) }
-            val fresh = cnt.last() + 1
-            cnt.add(fresh)
+            //val cnt = variables.computeIfAbsent(id) { arrayListOf(0) }
+            //val fresh = cnt.last() + 1
+            val fresh = VariableCounter.fresh(id.id)
+            variables[id] = fresh
+            //cnt.add(fresh)
 
             val t = signature[id] ?: error("Variable $id not declared")
             declareConst(t.toType(), id, fresh)
             return currentVar(id)
         }
 
-        fun introduce(signature: MutableList<Pair<TypeDecl, Variable>>) {
-            signature.forEach { (t, v) -> introduce(v, t) }
+        fun introduce(signature: MutableList<Pair<TypeDecl, Variable>>, global: Boolean = false) {
+            signature.forEach { (t, v) -> introduce(v, t, global) }
         }
 
-        fun introduce(v: Variable, t: TypeDecl) {
+        fun introduce(v: Variable, t: TypeDecl, global: Boolean = false) {
             this.signature[v] = t
+            if (global) {
+                this.global.add(v)
+            }
             if (t.array) {
                 val (l, t) = getLengthOf(v);
                 introduce(l, t)
@@ -57,21 +78,25 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
             return len to typ
         }
 
-        fun type(variable: Variable): String {
-            return signature[variable]?.toSmtType()
+        fun smtType(variable: Variable) = type(variable).toSmtType()
+
+        fun type(variable: Variable): TypeDecl {
+            return signature[variable]
                 ?: throw RuntimeException("Unknown variable ${variable.toHuman()}")
         }
     }
 
+    private var currentReturnVariable: Variable? = null
     private val vcgGenerated = HashSet<String>()
 
     val commands = arrayListOf<String>()
 
-    private fun declareConst(t: Type, v: Variable, i: Int) {
+    private fun declareConst(t: Type, v: Variable, i: Int? = null) {
+        val name = if (i == null) v.id else "${v.id}_$i"
         commands += if (t.dimension == 0)
-            "(declare-const ${v.id}_${i} ${t.toSmtType()})\n"
+            "(declare-const $name ${t.toSmtType()})\n"
         else
-            "(declare-const ${v.id}_${i} (Array Int ${t.toSmtType()}))\n"
+            "(declare-const $name (Array Int ${t.toSmtType()}))\n"
         require(t.dimension < 2)
     }
 
@@ -97,7 +122,9 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     private fun <T> sideGoal(name: String = "", fn: () -> T): T {
         commands += ";;; -- $name --------------------------------"
         commands += "(echo \"$name\")"
-        return fn()
+        val ret = fn()
+        commands += ";;; -- End of $name --------------------------------"
+        return ret
     }
 
     private fun <T> isolatedGoal(name: String = "", fn: () -> T): T {
@@ -141,6 +168,20 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 "(select $acc ${encodeExpression(e, vars, state)})"
             }
         }
+        is DoubleLit -> expr.value
+        is TypeCast -> when (expr.type.toType()) {
+            Type.INT -> "(to_int ${encodeExpression(expr.sub, state)})"
+            Type.BOOL -> "(= 1 ${encodeExpression(expr.sub, state)})"
+            Type.DOUBLE -> "(to_real ${encodeExpression(expr.sub, state)})"
+            else -> TODO()
+        }
+        is ArrayInit -> {
+            var s = "empty";
+            expr.values.forEachIndexed { index, expr ->
+                s = "(store $s $index ${encodeExpression(expr, state)})"
+            }
+            s
+        }
     }
 
     fun executeStatement(s: Statement, state: Scope = Scope()): Scope {
@@ -169,10 +210,11 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 s.rhs?.let { expr ->
                     val lhs = s.id
                     val rhs =
-                        if (expr is FunctionCall)
+                        if (expr is FunctionCall) {
                             encodeFunctionCallExpression(expr, state)
-                        else
+                        } else {
                             encodeExpression(expr, state)
+                        }
 
                     val value = s.arrayAccess?.let {
                         val arrayExpr = encodeExpression(it, state)
@@ -184,7 +226,11 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 }
                 state
             }
-            is Body -> s.statements.fold(state) { acc, statement -> executeStatement(statement, acc) }
+            is Body ->
+                s.statements.fold(state) { acc, statement ->
+                    //println(statement)
+                    executeStatement(statement, acc)
+                }
             is EmptyStmt -> {
                 state
             }
@@ -195,27 +241,35 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 state
             }
             is IfStmt -> {
+                val branchConditionVariable = Variable("__branch__cond_${s.position?.startLine}_${cnt++}")
+                state.introduce(branchConditionVariable, TypeDecl("bool"))
+                declareConst(Type.BOOL, branchConditionVariable)
+
                 //evaluate condition in the current goal
-                val cond = encodeExpression(s.cond, state)
-                val notCond = "(not $cond)"
+                val pureCond = encodeExpression(s.cond, state)
+                val cond = "(or ${branchConditionVariable.id} $pureCond)"
+                val notCond = "(or ${branchConditionVariable.id} (not $pureCond))"
 
                 // we split the goal into three subgoals:
                 val thenGoal = state.sub()   // (1) new scopes of the then-branch
                 val elseGoal = state.sub()   // (2) new scopes of the else-branch
                 val afterIf = state.sub()    // (3) new scopes after if-branch
 
+
                 // assume that the guard holds in the then-branch
-                val finalThenGoal = sideGoal {
+                val finalThenGoal = sideGoal("Then-Branch: Line ${s.then.position?.startLine}") {
                     assume(cond)
                     executeStatement(s.then, thenGoal)
                 }
 
                 // assume that the guard does not hold in the then-branch
-                val elseBody = s.otherwise ?: Body()
-                val finalElseGoal = sideGoal {
+                val elseBody = s.otherwise
+                val finalElseGoal = sideGoal("Else-Branch: Line ${s.otherwise.position?.startLine}") {
                     assume(notCond)
                     executeStatement(elseBody, elseGoal)
                 }
+
+                assume("(= ${branchConditionVariable.id} true)")
 
                 val allVars = finalThenGoal.signature.keys + finalElseGoal.signature.keys
                 allVars.forEach { v ->
@@ -223,7 +277,7 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                     val vElse = finalElseGoal.currentVar(v)
                     if (vThen != vElse) {// Conflict found: We have to merge
                         val newValue = afterIf.freshConst(v)
-                        assume("(= $newValue (ite $cond $vThen $vElse))")
+                        assume("(= $newValue (ite $pureCond $vThen $vElse))")
                     }
                 }
 
@@ -258,7 +312,29 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
                 assume("(not $cond)")
                 termination
             }
-            is ChooseStmt -> TODO()
+            is ProcedureCall -> {
+                // 1. Find procedure within the program
+                val procedure = procedures.find { it.name == s.id.id }
+                    ?: error("Could not find procedure with name ${s.id.id} amongst ${procedures.joinToString(", ") { it.name }}")
+                // 2. Map arguments
+                val bodyGoal = state.sub()
+                for ((param, arg) in procedure.args.zip(s.args)) {
+                    val variable = bodyGoal.freshConst(param.second)
+                    assume("(= $variable ${encodeExpression(arg, state)}")
+                }
+                currentReturnVariable = Variable("__retValue__${procedure.name}_${cnt++}")
+                bodyGoal.introduce(currentReturnVariable!!, procedure.returnType)
+                // 3. Proceed with the body of the procedure
+                executeStatement(procedure.body, bodyGoal)
+                state
+            }
+            is ReturnStmt -> {
+                if (currentReturnVariable != null && state.type(currentReturnVariable!!).toType() != Type.VOID) {
+                    val fresh = state.freshConst(currentReturnVariable!!)
+                    assume("(= $fresh ${encodeExpression(s.expr, state)})")
+                }
+                state
+            }
         }
     }
 
@@ -270,50 +346,76 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
         else "(and ${namedExpr.joinToString(" ")})"
     }
 
-    private fun encodeFunctionCallExpression(expr: FunctionCall, state: Scope): String {
-        val function = procedures.find { it.name == expr.id.id }
+    private fun encodeFunctionCallExpression(expr: FunctionCall, state: Scope) =
+        encodeFunctionCallExpression(expr.id.id, expr.args, state)
+
+    private fun encodeFunctionCallExpression(name: String, args: List<Expr>, state: Scope): String {
+        val function = procedures.find { it.name == name }
         require(function != null)
 
-        // Prove the function behind the function call
-        if (function.name !in vcgGenerated)
-            proveBody(function)
-
-        // reduce the arguments to single variables (introduce assignments)
-        isolatedGoal {
-            val sig = state.clone()
-
-            val params: List<String> = function.args.map { (t, v) ->
-                sig.signature[v] = t
-                sig.freshConst(v)
+        if (function.hasContracts()) {
+            // Prove the function behind the function call
+            if (function.name !in vcgGenerated) {
+                proveBody(function)
             }
 
-            expr.args.zip(params).forEach { (e, p) ->
-                assume("(= $p ${encodeExpression(e, state)})")
+            // reduce the arguments to single variables (introduce assignments)
+            isolatedGoal {
+                val sig = state.clone()
+
+                val params: List<String> = function.args.map { (t, v) ->
+                    sig.signature[v] = t
+                    sig.freshConst(v)
+                }
+
+                args.zip(params).forEach { (e, p) ->
+                    assume("(= $p ${encodeExpression(e, state)})")
+                }
+
+                // discharge the precondition
+                assert(encodeExpression(function.requires, sig))
+                checkSat()
             }
 
-            // discharge the precondition
-            assert(encodeExpression(function.requires, sig))
-            checkSat()
-        }
-
-        if (function.returnType.toType() != Type.VOID) {
-            val variable = Variable("__retValue__${function.name}_${cnt++}")
-            state.signature[variable] = function.returnType
-            val retValue = state.freshConst(variable)
-            assume(
-                "(= $retValue ${encodeExpression(function.ensures, state)})",
-                name = "Post-condition of ${function.name}"
-            )
-            return retValue
+            if (function.returnType.toType() != Type.VOID) {
+                val variable = Variable("__retValue__${function.name}_${cnt++}")
+                state.signature[variable] = function.returnType
+                val retValue = state.freshConst(variable)
+                assume(
+                    "(= $retValue ${encodeExpression(function.ensures, state)})",
+                    name = "Post-condition of ${function.name}"
+                )
+                return retValue
+            }
+        } else {
+            return encodeFunctionCallExpressionEmbedded(function, args, state)
         }
         return ""
     }
 
+    private fun encodeFunctionCallExpressionEmbedded(
+        function: Procedure,
+        args: List<Expr>,
+        state: SymEx2.Scope
+    ): String {
+        if (function.returnType.toType() == Type.VOID)
+            error("Function call in expression of void function: ${function.name}")
+        val subState = state.sub()
+        for ((param, arg) in function.args.zip(args)) {
+            subState.introduce(param.second, param.first)
+            val variable = subState.freshConst(param.second)
+            assume("(= $variable ${encodeExpression(arg, state)}")
+        }
+        currentReturnVariable = Variable("__retValue__${function.name}_${cnt++}")
+        subState.introduce(currentReturnVariable!!, function.returnType)
+        executeStatement(function.body, subState)
+        return currentReturnVariable!!.id
+    }
+
     var cnt = 0
 
-    fun proveBody(function: Procedure) {
+    fun proveBody(function: Procedure, scope: Scope = Scope()) {
         val proofObligation = Body(arrayListOf())
-        val scope = Scope()
         scope.introduce(function.signature)
         proofObligation.statements.add(AssumeStmt(function.requires, "pre-condition of ${function.name}"))
         proofObligation.statements.add(function.body)
@@ -326,6 +428,8 @@ class SymEx2(private val procedures: List<Procedure> = arrayListOf()) {
     }
 }
 
+private fun Procedure.hasContracts(): Boolean = ensures.isNotEmpty() || requires.isNotEmpty()
+
 
 fun String.named(s: String?): String = if (PRINT_ATTRIBUTES && s != null) "(! $this :named \"$s\")" else this
 fun String.position(p: Position?): String =
@@ -337,5 +441,8 @@ fun Type.toSmtType(): String = when (this) {
     Type.VOID, Type.ANY -> error("No SMT type for Void or ANY")
     Type.BOOL_ARRAY -> "(Array Int Bool)"
     Type.INT_ARRAY -> "(Array Int Int)"
-    Type.INT, Type.BOOL -> name.capitalize()
+    Type.INT -> "Int"
+    Type.BOOL -> "Bool"
+    Type.DOUBLE -> "Real"
+    Type.DOUBLE_ARRAY -> "(Array Int Real)"
 }

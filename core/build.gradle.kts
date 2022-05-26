@@ -16,7 +16,7 @@ application {
 
 
 val compileKotlin: KotlinCompile by tasks
-compileKotlin.kotlinOptions.useIR = true
+//compileKotlin.kotlinOptions.useIR = true
 compileKotlin.dependsOn("generateGrammarSource")
 
 repositories {

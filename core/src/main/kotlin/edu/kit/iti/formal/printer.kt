@@ -13,7 +13,7 @@ class Printer() : Visitor<String> {
     override fun visit(n: HavocStmt): String = "havoc ${n.ids.joinToString(", ") { it.accept(this) }}"
 
     override fun visit(n: WhileStmt): String =
-        "while (${n.cond.accept(this)})\n${n.body.accept(this).replace("\n","\n    ")}"
+        "while (${n.cond.accept(this)})\n${n.body.accept(this).replace("\n", "\n    ")}"
 
     override fun visit(n: IfStmt): String =
         "if(${n.cond.accept(this)})\n${n.then.accept(this)}" +
@@ -21,28 +21,42 @@ class Printer() : Visitor<String> {
 
     override fun visit(n: AssignStmt): String =
         (n.decl?.accept(this)?.let { "$it " } ?: "") + n.id.accept(this) +
-                (n.arrayAccess?.let{ "[" + it.accept(this) + "]"}?: "") +
+                (n.arrayAccess?.let { "[" + it.accept(this) + "]" } ?: "") +
                 (n.rhs?.let { " = " + it.accept(this) } ?: "") + ";"
 
     override fun visit(n: Procedure): String {
         val ret = n.returnType.accept(this)
         val args = n.args.joinToString(", ") { (a, b) ->
-            "${a.accept(this)} ${b.accept(this)}" }
+            "${a.accept(this)} ${b.accept(this)}"
+        }
         val body = n.body.accept(this)
         return "$ret ${n.name}($args)\n$body"
     }
 
     override fun visit(n: QuantifiedExpr) = "(\\${n.quantifier.smtSymbol}  " +
             "${n.binders.joinToString(", ") { (a, b) -> "${a.name} ${b.id}" }} ${n.sub.accept(this)})"
+
     override fun visit(n: IntLit): String = n.value.toString()
     override fun visit(n: BoolLit): String = n.value.toString()
-    override fun visit(n: ArrayAccess): String = "${n.id.accept(this)}[${n.args.joinToString(", ") { it.accept(this) }}]"
+    override fun visit(n: ArrayAccess): String =
+        "${n.id.accept(this)}[${n.args.joinToString(", ") { it.accept(this) }}]"
+
     override fun visit(n: Clauses): String = n.joinToString(", ") { (_, b) -> b.toHuman() }
     override fun visit(n: Body): String =
         "{\n" + n.statements.joinToString("\n") { "    " + it.accept(this).replace("\n", "\n    ") } + "\n}"
+
     override fun visit(n: EmptyStmt): String = ";"
     override fun visit(n: FunctionCall): String =
         "${n.id.accept(this)}(${n.args.joinToString(", ") { it.accept(this) }})"
 
-    override fun visit(n: ChooseStmt): String = "choose ${n.variables.joinToString(", ") {  it.accept(this) }} : ${n.expr.accept(this)};"
+    override fun visit(n: ChooseStmt): String =
+        "choose ${n.variables.joinToString(", ") { it.accept(this) }} : ${n.expr.accept(this)};"
+
+    override fun visit(typeCast: TypeCast): String = "(${typeCast.type}) ${typeCast.sub.accept(this)}"
+    override fun visit(lit: DoubleLit): String = lit.value
+    override fun visit(pcall: ProcedureCall): String =
+        "${pcall.id.accept(this)}(${pcall.args.joinToString(", ") { it.accept(this) }});"
+
+    override fun visit(arrayInit: ArrayInit): String = "{${arrayInit.values.joinToString(", ") { it.accept(this) }}}"
+    override fun visit(returnStmt: ReturnStmt): String = "return ${returnStmt.expr.accept(this)};"
 }
